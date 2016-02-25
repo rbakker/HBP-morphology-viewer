@@ -1,0 +1,216 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="X-UA-Compatible" content="chrome=1" />
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<title>HBP Neuron Morphology Viewer</title>
+<script type="text/javascript" src="./js/x3dom.js"></script>
+<link rel='stylesheet' type='text/css' href='./css/x3dom.css' />
+<!--link rel='stylesheet' type='text/css' href='./css/hbp-collaboratory-theme.css' /-->
+<!--link rel='stylesheet' type='text/css' href='./css/ez-filters-min.css' /-->
+<script type="text/javascript" src="./js/morphology_viewer.js"></script>
+<style>
+body{ font-family:Gotham,Arial,sans-serif;font-size:12px;line-height:1.3;color:rgb(0,0,0);background-color: #f8f8f8 }
+button,input,optgroup,select,textarea{color:inherit;font:inherit;margin:0}
+table.cmd { border-collapse: collapse }
+table.cmd th { border: 1px solid #088; text-align: left }
+table.cmd td { border: 1px solid #088 }
+ol { counter-reset: item; padding-left: 2ex }
+ol li { display: block }
+h3 { font-size:12px }
+div { font-size:12px }
+div.menu { font-size:11px; } 
+div.menu, div.select { position: relative; left: 8px; right: 8px; margin-top: 8px }
+#RuntimeError { background-color: #D00; color: #FFF }
+div.toggle-open,div.toggle-closed { font-weight: bold; color: #00D; float:left; width:4ex }
+div.toggle-disabled { display: none }
+div.content-closed { display: none }
+div.scrollbox { height:8em; border-left: 2px solid #088; padding-left: 2px; overflow-y:scroll }
+div.result { border-left: 10px solid #fa0; padding-left:4px }
+div.box { position: relative; padding-bottom: 50%; float: left; }
+.innerBox { position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px }
+</style>
+</head>
+<body onload="handleGetRequest()">
+<div class="menu"><a href="#readme">Readme</a>&#160;|&#160;<a href="#about">About</a>&#160;|&#160;<a href="#issues">What's new</a>&#160;|&#160;<a href="#feedback">Feedback</a></div>
+<div class="select">Select morphology:&#160;<input type="file" id="morpho_file" name="morpho_file" style="display:inline"/>&#160;(SWC, neurolucida-ASC, neurolucida-XML or neurolucida-DAT/NRX)</div>
+<div id="RuntimeError" style="display:none"></div>
+
+<div>
+  <div class="box" style="width: 35%">
+    <div class="innerBox" style="overflow: scroll" id="HTML_TREE">No morphology loaded.<br/>Use the above button, or try the <a href="#" onclick="loadSampleNeuron()">sample neuron</a>.</div>
+  </div>
+  <div class="box" style="width: 65%" id="X3D_DIV">
+    <X3D class="innerBox" style="background-color: #fff" id="X3D_ROOT" profile="Interchange" version="3.2" xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xsd:noNamespaceSchemaLocation="http://www.web3d.org/specifications/x3d-3.2.xsd">
+      <Scene id="X3D_SCENE">
+        <Transform rotation="1 1 1 1">
+          <Shape>
+            <Appearance>
+              <ImageTexture  url="./img/HBP_box.png"></ImageTexture>
+            </Appearance>
+            <Box></Box>
+          </Shape>
+        </Transform>
+      </Scene>
+    </X3D>
+  </div>
+</div>
+
+<p><a name="readme"><h3>Readme</h3></a>
+After loading a file, it's raw data is visible as an expandable data tree, and its rotatable 3d shape is rendered in the X3D panel. Standard <a href="http://www.x3dom.org/documentation/interaction/">X3D controls</a> apply, notably the 'a' key resets the view to All Visible.
+You can left click on a tree segment to see its full branch name, which you can then lookup in the data tree to see the corresponding data values.
+<br/>Color scheme: blue = Axon, red = Dendrites, dark red = Apical dendrite, black = Other.
+<p><a name="about"><h3>About</h3></a>
+Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
+<br/>funded by the Human Brain Project Neuroinformatics Platform.
+</p><p><a name="issues"><h3>What's new</h3></a>
+<ul>
+  <li>2016-Feb: HBP integration: GET parameter hbp-uuid now supported.</li>
+  <li>2016-Feb: Responsive two column layout.</li>
+  <li>2016-Feb: Neurolucida V3 DAT file supported (experimental).</li>
+</ul>
+<h3>Issue tracker</h3>
+<ul>
+  <li>All formats: segment diameter is not used in visualization.</li>
+  <li>All formats: initial zoom does not always focus properly on the neuron. Workaround: click on X3D panel, press the 'a' key.</li>
+  <li>Neurolucida formats: Point markers are ignored.</li>
+  <li>SWC: Axon is displayed as a line.</li>
+</ul>
+Acknowledgement for Neurolucida DAT file parsing: <a href="http://neuronland.org/NLMorphologyConverter/MorphologyFormats/NeurolucidaDAT/Spec.html">Neuroland</a>.
+<br/>We've identified two other WebGL-based morphology viewers:
+<ul>
+<li><a href="https://servicehub.mpdl.mpg.de/swc">MPDL SWC-service</a>, view on <a href="https://github.com/MPDL/swc-service/blob/master/README.md#usage">github</a></li>
+<li><a href="http://janeliascicomp.github.io/SharkViewer/">Shark Viewer</a>, view on <a href="https://github.com/JaneliaSciComp/SharkViewer">github</a></li>
+</ul>
+</p>
+<p><a name="feedback"><h3>Feedback</h3></a>
+If you have a particular neuron that doesn't load well, please <a href="mailto:hbp@scalablebrainatlas.org">send us</a> (a link to) it.
+<br/>If the tool does not work on a particular browser/operating system, but that combination does support x3dom <a href="http://www.x3dom.org/contact/?page_id=9">(check)</a>, then see if you have any <a href="http://webmasters.stackexchange.com/questions/8525/how-to-open-the-javascript-console-in-different-browsers">javascript errors</a> and <a href="mailto:hbp@scalablebrainatlas.org">send us</a> the error.
+</p>
+
+<script>
+//<![CDATA[
+function handleLineClick(elem) {
+  alert(elem.id);
+}
+
+function displayResult(data,fileName) {
+  var errorDiv = document.getElementById('RuntimeError');
+  errorDiv.style.display = 'none';
+  var treeDiv = document.getElementById('HTML_TREE');
+  treeDiv.innerHTML = '<img src="./img/ajax-loader.gif" alt="This may take a few seconds..."/>';
+  var parts = fileName.split('.');
+  var ext = parts[parts.length-1].toLowerCase();
+  var tree;
+  if (ext == 'xml') {
+    tree = treeFromNeurolucidaXML(data,fileName);
+  } else if (ext == 'asc') {
+    tree = treeFromNeurolucidaASC(data,fileName);
+  } else if (ext == 'dat' || ext == 'nrx') {
+    tree = treeFromNeurolucidaDAT(data,fileName);
+  } else if (ext == 'swc') {
+    tree = treeFromSWC(data,fileName);
+  } else {
+    treeDiv.innerHTML = '';
+    RuntimeError('Your file does not have a supported extension (.asc, .xml, .swc, .dat, .nrx)');
+    return;
+  }
+
+  //tree = rawToBranches(raw,fileObj.name);
+  treeDiv.innerHTML = treeHtml(tree,'h2');
+  var limits = tree.getLimits();
+  if (limits) {
+    var mn = limits[0];
+    var mx = limits[1];
+    var mid = [0.5*(mn[0]+mx[0]), 0.5*(mn[1]+mx[1]), 0.5*(mn[2]+mx[2])];
+    var x3d_height = 1000;
+    var x3d_width = 1000;
+    var distanceW = 2*(mx[0]-mn[0])*x3d_height/x3d_width;
+    var distanceH = 2*(mx[1]-mn[1])*x3d_width/x3d_height;
+    var distance = Math.max(distanceW,distanceH);
+    var position = [mid[0],mid[1],mid[2]+distance];
+    
+    // replace existing x3dElem by the new domElem
+    var scene = document.getElementById('X3D_SCENE');
+    scene.innerHTML = treeToShapes(tree);
+    var vpElem = document.createElement('viewpoint');
+    vpElem.setAttribute("orientation","0 0 1 0");
+    vpElem.setAttribute("fieldOfView","0.5236");
+    vpElem.setAttribute("position",position.join(' '));
+    vpElem.setAttribute("centerOfRotation",mid.join(' '));
+    scene.appendChild(vpElem);
+  }
+}
+
+function handleFileSelect(evt) {
+  var fileObj = evt.target.files[0]; // FileList object
+  var fileName = fileObj.name;
+  
+  var reader = new FileReader();
+  reader.onload = (function(fileName) { return function(e) {
+    displayResult(this.result,fileName);
+  }})(fileName);
+
+  // Read in the image file as a data URL.
+  var parts = fileName.split('.');
+  var ext = parts[parts.length-1].toLowerCase();
+  if (ext.toLowerCase() == 'dat' || ext.toLowerCase() == 'nrx') {
+    reader.readAsArrayBuffer(fileObj);
+  } else {
+    reader.readAsText(fileObj);
+  }
+}
+
+function loadSampleNeuron() {
+  // include jquery
+  var elem = document.createElement('script');
+  elem.setAttribute('type','text/javascript');
+  elem.setAttribute('src','./js/jquery-2.1.4.min.js');
+  elem.onreadystatechange = elem.onload = function() {
+    var fileName = 'c10861.CNG.swc';
+    $.ajax('./samples/'+fileName,{
+      'mimeType':'text/plain; charset=utf-8'
+    })
+    .done(function(data) {
+      displayResult(data,fileName);
+    })
+    .fail(function(err) {
+      if (err.statusText == 'OK') displayResult(err.responseText,fileName) // data returned as error when using file:/
+      else RuntimeError(JSON.stringify(err, null, 2))
+    })
+  }
+  document.getElementsByTagName('head')[0].appendChild(elem);
+}
+  
+function handleGetRequest() {
+  var hbpUuid = getQueryVariable('hbp-uuid');
+  if (!hbpUuid) {
+    var state = getQueryVariable('ctxstate');
+    if (state) {
+      state = decodeURIComponent(state).split('&');
+      var kv = state[0].split('=');
+      if (kv[0] == 'uuid') hbpUuid = kv[1];
+    }
+  }
+  if (hbpUuid) {
+    var scripts = ["./js/jquery-2.1.4.min.js","./js/bbp-oidc-client.js"];
+    for (var i=0; i<scripts.length; i++) {
+      var elem = document.createElement('script');
+      elem.setAttribute('type','text/javascript');
+      elem.setAttribute('src',scripts[i]);
+      elem.onreadystatechange = elem.onload = function() {
+        scripts.pop();
+        if (scripts.length == 0) {
+          HBP_retrieveFile(hbpUuid);
+        }
+      }
+      document.getElementsByTagName('head')[0].appendChild(elem);
+    }
+  }
+}
+
+document.getElementById('morpho_file').addEventListener('change', handleFileSelect, false);
+//]]>
+</script>
+</body>
+</html>
