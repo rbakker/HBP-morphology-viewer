@@ -18,6 +18,7 @@ table.cmd td { border: 1px solid #088 }
 ol { counter-reset: item; padding-left: 2ex }
 ol li { display: block }
 h3 { font-size:12px }
+pre { font-size: 10px }
 div { font-size:12px }
 div.menu { font-size:11px; } 
 div.menu, div.select { position: relative; left: 8px; right: 8px; margin-top: 8px }
@@ -26,19 +27,59 @@ div.toggle-open,div.toggle-closed { font-weight: bold; color: #00D; float:left; 
 div.toggle-disabled { display: none }
 div.content-closed { display: none }
 div.scrollbox { height:8em; border-left: 2px solid #088; padding-left: 2px; overflow-y:scroll }
-div.result { border-left: 10px solid #fa0; padding-left:4px }
+div.result { margin-left: 4px; border-left: 2px solid #0a0; padding-left:4px }
 div.box { position: relative; padding-bottom: 50%; float: left; }
 .innerBox { position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px }
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: #eea;
+  color: #000;
+  text-align: center;
+  padding: 5px 0;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+ 
+  position: absolute;
+  z-index: 1;
+
+  width: 160px;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -80px;
+}
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
+.tooltip .tooltiptext::after {
+    content: " ";
+    position: absolute;
+    top: 100%; /* At the bottom of the tooltip */
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #eea transparent transparent transparent;
+}
 </style>
+
 </head>
 <body onload="handleGetRequest()">
 <div class="menu"><a href="#readme">Readme</a>&#160;|&#160;<a href="#about">About</a>&#160;|&#160;<a href="#issues">What's new</a>&#160;|&#160;<a href="#feedback">Feedback</a></div>
-<div class="select">Select morphology:&#160;<input type="file" id="morpho_file" name="morpho_file" style="display:inline"/>&#160;(SWC, neurolucida-ASC, neurolucida-XML or neurolucida-DAT/NRX)</div>
+<div class="select">Select morphology:&#160;<input type="file" id="morpho_file" name="morpho_file" style="display:inline"/>&#160;</div>
 <div id="RuntimeError" style="display:none"></div>
 
+<div style="position: relative; left: 35%" id="X3D_CONTROLS">
+  <div class="tooltip" style="left: 8px"><input type="button" onclick="saveAsPng()" value="Export PNG"/><span class="tooltiptext">Save the current view as a bitmap image (.png)</span></div>
+  <div class="tooltip" style="left: 8px"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div>
+</div>
 <div>
   <div class="box" style="width: 35%">
-    <div class="innerBox" style="overflow: scroll" id="HTML_TREE">No morphology loaded.<br/>Use the above button, or try the <a href="#" onclick="loadSampleNeuron()">sample neuron</a>.</div>
+    <div class="innerBox" style="overflow: scroll" id="HTML_TREE">No morphology loaded.<br/>Use the above button, or try the <a href="#" onclick="loadSampleNeuron()">sample neuron</a>.<p>Supported file formats: SWC, neurolucida-ASC, neurolucida-XML or neurolucida-DAT/NRX</p></div>
   </div>
   <div class="box" style="width: 65%" id="X3D_DIV">
     <X3D class="innerBox" style="background-color: #fff" id="X3D_ROOT" profile="Interchange" version="3.2" xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xsd:noNamespaceSchemaLocation="http://www.web3d.org/specifications/x3d-3.2.xsd">
@@ -54,6 +95,8 @@ div.box { position: relative; padding-bottom: 50%; float: left; }
       </Scene>
     </X3D>
   </div>
+  <div style="visibility: hidden" id="SVG_DIV">
+  </div>
 </div>
 
 <p><a name="readme"><h3>Readme</h3></a>
@@ -65,6 +108,9 @@ Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
 <br/>funded by the Human Brain Project Neuroinformatics Platform.
 </p><p><a name="issues"><h3>What's new</h3></a>
 <ul>
+  <li>2016-Apr: SVG and PNG export.</li>
+  <li>2016-Mar: Neurolucida ASC parser no longer fails when contour names contain quotes or brackets.</li>
+  <li>2016-Mar: The visibility of selected tree branches can be toggled on/off.</li>
   <li>2016-Feb: HBP integration: GET parameter hbp-uuid now supported.</li>
   <li>2016-Feb: Responsive two column layout.</li>
   <li>2016-Feb: Neurolucida V3 DAT file supported (experimental).</li>
@@ -74,13 +120,20 @@ Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
   <li>All formats: segment diameter is not used in visualization.</li>
   <li>All formats: initial zoom does not always focus properly on the neuron. Workaround: click on X3D panel, press the 'a' key.</li>
   <li>Neurolucida formats: Point markers are ignored.</li>
+  <li>Neurolucida formats: Axon contour is only visible after switching contours on.</li>
+  <li>Data tree and 3d view not always synchronized when switching tree elementts on/off.</li>
   <li>SWC: Axon is displayed as a line.</li>
+  <li>Feature request: Generate data tree dynamically to save memory.</li>
+  <li>Feature request: Tighter integration between data tree and 3d view.</li>
+  <li>Feature request: Buttons to show default perspectives.</li>
+  <li>Feature request: SaveAs SWC.</li>
+  <li>Feature request: <div class="tooltip"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div></li>
 </ul>
-Acknowledgement for Neurolucida DAT file parsing: <a href="http://neuronland.org/NLMorphologyConverter/MorphologyFormats/NeurolucidaDAT/Spec.html">Neuroland</a>.
+Acknowledgement for Neurolucida DAT file parsing: <a href="http://neuronland.org/NLMorphologyConverter/MorphologyFormats/NeurolucidaDAT/Spec.html">Neuronland</a>.
 <br/>We've identified two other WebGL-based morphology viewers:
 <ul>
-<li><a href="https://servicehub.mpdl.mpg.de/swc">MPDL SWC-service</a>, view on <a href="https://github.com/MPDL/swc-service/blob/master/README.md#usage">github</a></li>
 <li><a href="http://janeliascicomp.github.io/SharkViewer/">Shark Viewer</a>, view on <a href="https://github.com/JaneliaSciComp/SharkViewer">github</a></li>
+<li><a href="https://servicehub.mpdl.mpg.de/swc">MPDL SWC-service</a> (based on Shark Viewer), view on <a href="https://github.com/MPDL/swc-service/blob/master/README.md#usage">github</a></li>
 </ul>
 </p>
 <p><a name="feedback"><h3>Feedback</h3></a>
@@ -89,27 +142,86 @@ If you have a particular neuron that doesn't load well, please <a href="mailto:h
 </p>
 
 <script>
+var TREE
+var SCRIPTS = {}
+
 //<![CDATA[
 function handleLineClick(elem) {
   alert(elem.id);
+}
+
+function addScript(name,src,callback) {
+  var elem = document.createElement('script')
+  elem.setAttribute('type','text/javascript')
+  elem.setAttribute('src',src)
+  SCRIPTS[name] = true;
+  elem.onreadystatechange = elem.onload = callback
+  document.getElementsByTagName('head')[0].appendChild(elem);
+}
+
+function saveAsPng() {
+  if (TREE == undefined) {
+    RuntimeError('You must first load a neuron into the viewer.');
+    return;
+  }
+  if (SCRIPTS['FileSaver'] && SCRIPTS['ToBlob']) {
+    elem = document.getElementById('X3D_ROOT')
+    var canvas = elem.runtime.getCanvas()
+    canvas.toBlob(function(blob) {
+      saveAs(blob,"morphology.png");
+    })
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsPng)
+    addScript('ToBlob','./js/canvas-toBlob.js',saveAsPng)
+  }
+}
+
+function saveAsSvg() {
+  if (TREE == undefined) {
+    RuntimeError('You must first load a neuron into the viewer.');
+    return;
+  }
+  if (SCRIPTS['FileSaver']) {
+    var elem = document.getElementById('SVG_ROOT')
+    if (!elem) {
+      elem = document.createElementNS('http://www.w3.org/2000/svg','svg')
+      elem.setAttribute("id","SVG_ROOT")
+      elem.setAttribute("xmlns","http://www.w3.org/2000/svg")
+      elem.setAttribute("class","innerBox")
+      elem.setAttribute("preserveAspectRatio","xMinYMin meet")
+      elem.setAttribute("style","shape-rendering:geometricPrecision; text-rendering:geometricPrecision; fill-rule:evenodd")
+      elem.setAttribute("viewBox","-10000 -10000 20000 20000")
+      document.getElementById('SVG_DIV').appendChild(elem)
+    }
+    var x3d = document.getElementById('X3D_ROOT')
+    M = x3d.runtime.viewMatrix()
+    var svg = '<g transform="scale(1,-1)">'+treeToShapes(TREE,undefined,false,[[M._00,M._01,M._02],[M._10,M._11,M._12]])+'</g>'
+    elem.innerHTML = svg
+    var bb = elem.getBBox()
+    elem.setAttribute("viewBox",[bb.x,bb.y,bb.width,bb.height].join(' '))
+    var blob = new Blob([elem.outerHTML], {type:'image/svg+xml'})
+    saveAs(blob,'morphology.svg')
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsSvg)
+  }
 }
 
 function displayResult(data,fileName) {
   var errorDiv = document.getElementById('RuntimeError');
   errorDiv.style.display = 'none';
   var treeDiv = document.getElementById('HTML_TREE');
-  treeDiv.innerHTML = '<img src="./img/ajax-loader.gif" alt="This may take a few seconds..."/>';
+  treeDiv.innerHTML = '<img src="./img/ajax-loader.gif" alt="This may take a few seconds..."/>Loading file "'+fileName+'".';
+  if (!data) return;
   var parts = fileName.split('.');
   var ext = parts[parts.length-1].toLowerCase();
-  var tree;
   if (ext == 'xml') {
-    tree = treeFromNeurolucidaXML(data,fileName);
+    TREE = treeFromNeurolucidaXML(data,fileName);
   } else if (ext == 'asc') {
-    tree = treeFromNeurolucidaASC(data,fileName);
+    TREE = treeFromNeurolucidaASC(data,fileName);
   } else if (ext == 'dat' || ext == 'nrx') {
-    tree = treeFromNeurolucidaDAT(data,fileName);
+    TREE = treeFromNeurolucidaDAT(data,fileName);
   } else if (ext == 'swc') {
-    tree = treeFromSWC(data,fileName);
+    TREE = treeFromSWC(data,fileName);
   } else {
     treeDiv.innerHTML = '';
     RuntimeError('Your file does not have a supported extension (.asc, .xml, .swc, .dat, .nrx)');
@@ -117,8 +229,8 @@ function displayResult(data,fileName) {
   }
 
   //tree = rawToBranches(raw,fileObj.name);
-  treeDiv.innerHTML = treeHtml(tree,'h2');
-  var limits = tree.getLimits();
+  treeDiv.innerHTML = treeHtml(TREE,'h2');
+  var limits = TREE.getLimits();
   if (limits) {
     var mn = limits[0];
     var mx = limits[1];
@@ -132,7 +244,7 @@ function displayResult(data,fileName) {
     
     // replace existing x3dElem by the new domElem
     var scene = document.getElementById('X3D_SCENE');
-    scene.innerHTML = treeToShapes(tree);
+    scene.innerHTML = treeToShapes(TREE);
     var vpElem = document.createElement('viewpoint');
     vpElem.setAttribute("orientation","0 0 1 0");
     vpElem.setAttribute("fieldOfView","0.5236");
@@ -193,18 +305,19 @@ function handleGetRequest() {
     }
   }
   if (hbpUuid) {
-    var scripts = ["./js/jquery-2.1.4.min.js","./js/bbp-oidc-client.js"];
+    //console.log('The HBP uuid is: '+hbpUuid)
+    var scripts = ["./js/jquery-2.1.4.min.js","./js/bbp-oidc-client.js"]
     for (var i=0; i<scripts.length; i++) {
-      var elem = document.createElement('script');
-      elem.setAttribute('type','text/javascript');
-      elem.setAttribute('src',scripts[i]);
+      var elem = document.createElement('script')
+      elem.setAttribute('type','text/javascript')
+      elem.setAttribute('src',scripts[i])
       elem.onreadystatechange = elem.onload = function() {
-        scripts.pop();
+        scripts.pop()
         if (scripts.length == 0) {
-          HBP_retrieveFile(hbpUuid);
+          HBP_retrieveFile(hbpUuid)
         }
       }
-      document.getElementsByTagName('head')[0].appendChild(elem);
+      document.getElementsByTagName('head')[0].appendChild(elem)
     }
   }
 }

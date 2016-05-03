@@ -96,12 +96,16 @@ function treeHtml(tree,tagName,level) {
   var name = tree.name ? tree.name : (tree.info.type ? tree.info.type : '');
   var ans = toggleMe+' '+'<'+tagName+'>'+shapeMe+' '+name+'</'+tagName+'>'+startContent;
   ans += '<div class="result">';
-  ans += '<b>'+JSON.stringify(tree['info'])+'</b>';
-  ans += '<div>';
-  var R = tree['_segm'];
-  ans += genTable(undefined,R,'result');
-  ans += '</div>';
-  ans += '</div>';
+  ans += 'type: <b>'+tree.type+'</b>, attributes: <b>'+JSON.stringify(tree['info'])+'</b>';
+  if (tree._segm.length) {
+    var _segm = tree._segm
+    ans += '<pre>';
+    for (var i=0; i<_segm.length; i+=4) {
+      if (i>0) ans += '<br/>'
+      ans += '<span class="coord">'+_segm[i+0].toFixed(2)+' '+_segm[i+1].toFixed(2)+' '+_segm[i+2].toFixed(2)+' '+_segm[i+3].toFixed(2)
+    }
+  }
+  ans += '</pre>';
 
   var branches = tree.children;
   if (branches) {
@@ -119,8 +123,9 @@ function handleLineClick(lineElem) {
   alert(lineElem.id);
 }
 
-function treeToShapes(tree,color) {
-  var x3d = []
+function treeToShapes(tree,color,useCylinders,projectSvg) {
+  useCylinders = false
+  var xml = []
   var type = tree.type
   var info = tree.info
   if (type == 'marker') return ''
@@ -131,30 +136,73 @@ function treeToShapes(tree,color) {
   var _segm = tree._segm
   if (_segm.length>1) {
     var render = (tree.visible !== false)
-    x3d.push('<Shape id="'+tree.name+'" onclick="handleLineClick(this)" render="'+render+'">')
-    x3d.push('<Appearance><Material emissiveColor="'+color+'"></Material>')
-    x3d.push('<LineProperties linetype="1" linewidthScaleFactor="4" applied="true" containerField="lineProperties"></LineProperties></Appearance>')
-    var points = []
-    if (tree.parent) {
-      var p_segm = tree.parent._segm
-      var len = p_segm.length
-      if (len) {
-        points.push([p_segm[len-4],p_segm[len-3],p_segm[len-2]].join(','))
+    if (projectSvg) {
+      if (!render) return;
+      var rgb = color.split(' ')
+      rgb = [Math.floor(rgb[0]*255),Math.floor(rgb[1]*255),Math.floor(rgb[2]*255)]
+      rgb = 'rgb('+rgb.join(',')+')'
+      var pr0 = projectSvg[0]
+      var pr1 = projectSvg[1]
+      var project2d = function(x) {
+        return [
+          pr0[0]*x[0]+pr0[1]*x[1]+pr0[2]*x[2],
+          pr1[0]*x[0]+pr1[1]*x[1]+pr1[2]*x[2]
+        ]
+      }
+      xml.push('<g id="'+tree.name+'">')
+    } else {
+      xml.push('<Shape id="'+tree.name+'" onclick="handleLineClick(this)" render="'+render+'">')
+      xml.push('<Appearance><Material emissiveColor="'+color+'"></Material>')
+      if (!useCylinders) xml.push('<LineProperties linetype="1" linewidthScaleFactor="4" applied="true" containerField="lineProperties"></LineProperties>')
+      xml.push('</Appearance>')
+    }
+    if (useCylinders) {
+      var mn
+      if (tree.parent) {
+        var p_segm = tree.parent._segm
+        var len = p_segm.length
+        if (len) {
+          mn = [(p_segm[len-4]+_segm[0]).toFixed(2),(p_segm[len-3]+_segm[1]).toFixed(2),(p_segm[len-2]+_segm[2]).toFixed(2)]
+          xml.push('<Transform translation="'+mn.join(',')+'"><Cylinder containerField="geometry"/></Transform>')
+        }
+      }
+      for (var i=4; i<_segm.length; i+=4) {
+        var mn = [_segm[i-4]+_segm[i+0],_segm[i-3]+_segm[i+1],_segm[i-2]+_segm[i+2]]
+        xml.push('<Transform translation="'+mn.join(',')+'"><Cylinder  containerField="geometry"/></Transform>')
+      }
+    } else {
+      var points = []
+      if (tree.parent) {
+        var p_segm = tree.parent._segm
+        var len = p_segm.length
+        if (len) {
+          if (projectSvg) points.push( project2d([p_segm[len-4],p_segm[len-3],p_segm[len-2]]).join(',') )
+          else points.push( [p_segm[len-4],p_segm[len-3],p_segm[len-2]].join(',') )
+        }
+      }
+      if (projectSvg) {
+        for (var i=0; i<_segm.length; i+=4) 
+          points.push( project2d([_segm[i+0],_segm[i+1],_segm[i+2]]).join(',') )
+        xml.push('<polyline points="'+points.join(' ')+'" style="fill:none;stroke:'+rgb+';stroke-width:3"/>')
+      } else {
+        for (var i=0; i<_segm.length; i+=4) 
+          points.push( [_segm[i+0],_segm[i+1],_segm[i+2]].join(',') )
+        xml.push('<LineSet vertexCount="'+(points.length)+'" containerField="geometry">')
+        xml.push('<Coordinate point="'+points.join(' ')+'"/>')
+        xml.push('</LineSet>')
       }
     }
-    for (var i=0; i<_segm.length; i+=4) {
-      points.push([_segm[i+0],_segm[i+1],_segm[i+2]].join(','))
+    if (projectSvg) {
+      xml.push('</g>')
+    } else {
+      xml.push('</Shape>')
     }
-    x3d.push('<LineSet vertexCount="'+(points.length)+'" containerField="geometry">')
-    x3d.push('<Coordinate point="'+points.join(' ')+'"/>')
-    x3d.push('</LineSet>')
-    x3d.push('</Shape>')
   }
   var branches = tree.children;
   for (var i=0; i<branches.length; i++) {
-    x3d.push(treeToShapes(branches[i],color))
+    xml.push(treeToShapes(branches[i],color,useCylinders,projectSvg))
   }
-  return x3d.join('\n')
+  return xml.join('\n')
 }
 
 function sqr(x) { return x*x; }
@@ -301,7 +349,9 @@ node_class.prototype.addBranchFromRaw = function(raw) {
           info[v0] = v[1];
         }
       } else if (tov0 == 'number') {
-        if (v.length==4) segm.push(new Float32Array(v));
+        // ignore section number
+        if (v.length==5) v.pop();
+        if (v.length==4) segm.push(v);
         else RuntimeError('ASC parser: expecting array length to be 4.')
       } else {
         branches.push(i);
@@ -572,21 +622,26 @@ node_class.prototype.toggleVisibility = function(makeVisible) {
 }
 
 function resultToJSON(result,doParse) {
+  // encode quoted words
+  result = result.replace(/"((?:[^"\\]|\\.)*)"/mg,function($0,$1) { return '"$'+window.btoa($1)+'$"' });
   // remove single line comments
   result = result.replace(/\s*;.*?$/mg,'');
   // replace | forks
   result = result.replace(/\)(\s*)\|(\s*)\(/g,')$1][$2(');
   result = result.replace(/\)(\s*)(["\w]+)(\s*)\|(\s*)\(/g,')$1["leaf","$2"]$3][$4(');
   result = result.replace(/\)(\s*)(["\w]+)(\s*)\)/g,')$1["leaf","$2"]$3)');
-  // number quadruplets
+  // x y z d quadruplets
   result = result.replace(/\(\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*\)/mg,'[$1,$2,$3,$4],');
+  // x y z d + section quintuplets
+  result = result.replace(/\(\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*S(\d+)\s*\)/mg,'[$1,$2,$3,$4,$5],');
   // contour names and markers
-  result = result.replace(/\("([^"]*)"/g,'["$1",');
-  result = result.replace(/\(([\w]+)(\s*)\(/g,'["@$1",$2(');
+  result = result.replace(/\("([^"]*)"/mg,'["$1",');
+  result = result.replace(/\((\w+)(\s*)\(/mg,'["@$1",$2(');
   // attributes
-  result = result.replace(/\(\s*(\w[^\s]*)\s*\)/mg,'["$1"],');
-  result = result.replace(/\(\s*(\w[^\s]*)\s*"([^\s].*)"\)/mg,function($0,$1,$2) { $2 = $2.replace(/"/g,'\\"'); return '["'+$1+'","'+$2+'"],' });
-  result = result.replace(/\(\s*(\w[^\s]*)\s*([^\s].*)\)/mg,function($0,$1,$2) { $2 = $2.replace(/"/g,'\\"'); return '["'+$1+'","'+$2+'"],' });
+  result = result.replace(/\(\s*(\w[^\s]*)\s*\)\s*$/mg,'\n["$1"],');
+  result = result.replace(/\(\s*(\w[^\s]*)\s+"(.*)"\)\s*$/mg,function($0,$1,$2) { return '["'+$1+'",'+JSON.stringify($2)+'],' });
+  result = result.replace(/\(\s*(\w[^\s]*)\s+([^\s].*)\)\s*$/mg,function($0,$1,$2) { return '["'+$1+'",'+JSON.stringify($2)+'],' });
+  result = result.replace(/\n\s*\(\s*(\w[^\s]*)\s+([^\)]+)\)\s*\n/g,function($0,$1,$2) { return '\n["'+$1+'",\n'+JSON.stringify($2)+'],\n' });
   // replace round by square brackets
   result = result.replace(/$(\s*)\(/mg,'$1[');
   result = result.replace(/\)(\s*)^/mg,']$1');
@@ -594,61 +649,19 @@ function resultToJSON(result,doParse) {
   result = result.replace(/\],(\s*)\]/g,']$1]');
   // add missing commas
   result = result.replace(/\](\s*)\[/g,'],$1[');
+  // decode quoted words
+  result = result.replace(/"\$([^"]*)\$"/mg,function($0,$1) { return '"'+window.atob($1)+'"' });
   
   if (doParse) {
-    result = JSON.parse('['+result+']');
-    if (!result) {
-      RuntimeError('Could not convert the Neurolucida ASC file to valid JSON.')
+    try {
+      result = JSON.parse('['+result+']');
+    } catch(err) {
+      RuntimeError('Could not convert the Neurolucida ASC file to valid JSON: '+err.msg)
     }
   }
   
   return result;
 }
-
-/*
-function resultToRaw(result) {
-  // remove single line comments
-  result = result.replace(/\s*;.*?$/mg,'');
-
-  // substitute expressions between double quotes
-  var subst = [];
-  result = result.replace(/(".*")/g,function($0,$1) {
-    subst.push($1);
-    return ' #'+(subst.length-1)+' ';
-  })
-
-  // recursively substitute expressions between parentheses
-  var re = /\(\s*([^\(]*?)\s*\)/g;
-  while (re.test(result)) {
-    result = result.replace(re,function($0,$1) {
-      var tokens = $1.split(/\s+/);
-      for (var i=0; i<tokens.length; i++) {
-        var v = tokens[i];
-        if (v.charAt(0)=='#') {
-          key = Number(v.substr(1));
-          tokens[i] = subst[key];
-        } else {
-          v = new Number(v);
-          if (!isNaN(v)) tokens[i] = v;
-        }
-      }
-      subst.push(tokens);
-      return ' #'+(subst.length-1)+' ';
-    });
-  }
-  
-  // remaining tokens link to end result
-  raw = result.replace(/^\s+/,'').replace(/\s+$/,'').split(/\s+/);
-  for (i=0; i<raw.length; i++) {
-    var v = raw[i];
-    if (v.charAt(0)=='#') {
-      key = Number(v.substr(1));
-      raw[i] = subst[key];
-    }
-  }
-  return raw;
-}
-*/
 
 function RuntimeError(msg) {
   var errorDiv = document.getElementById('RuntimeError');
@@ -724,15 +737,16 @@ function treeFromNeurolucidaASC(ascStr,fileName) {
     return;
   }
   var info = {'name':fileName,'type':'root'};
-  var i,iStart,v;
+  var i,iStart,v,key;
   iStart = 0;
   for (var i=0; i<raw.length; i++) {
     v = raw[i];
     if (!v.length) break;
+    var key = v[0].toLowerCase();
     if (v.length==1) {
-      info[v[0].toLowerCase()] = true;
+      info[key] = true;
     } else if (v.length==2) {
-      info[v[0].toLowerCase()] = v[1];
+      if (key != 'thumbnail') info[key] = v[1];
     } else {
       iStart = i;
       break;
@@ -743,7 +757,7 @@ function treeFromNeurolucidaASC(ascStr,fileName) {
     root.addBranchFromRaw(raw[i]);
   }
   return root;
-}  
+}
 
 function treeFromNeurolucidaXML(xmlStr,fileName) {
   xmlStr = xmlStr.replace('xmlns="http://www.mbfbioscience.com/2007/neurolucida"','');
@@ -830,8 +844,14 @@ function HBP_retrieveFile(hbpUuid) {
     }
   })
   .done(function(data) {
-    data = JSON.parse(data);
-    var fileName = data['_name'];
+    try {
+      data = JSON.parse(data);
+      var fileName = data['_name'];
+    } catch(err) {
+      //console.log(data)
+      var fileName = data['_name'];
+    }
+    displayResult(false,fileName);
     $.ajax('https://services.humanbrainproject.eu/document/v0/api/file/'+hbpUuid+'/content', {
       headers: {
         Authorization: 'Bearer ' + token
