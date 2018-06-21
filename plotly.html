@@ -1,0 +1,304 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!--
+                                                                                                                                                   /*
+This file is part of the HBP Neuron Morphology Miner.
+
+HBP Neuron Morphology Miner is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+HBP Neuron Morphology Miner is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with HBP morphology viewer.  
+If not, see <http://www.gnu.org/licenses/>
+
+-->
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="X-UA-Compatible" content="chrome=1" />
+<meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
+<title>HBP Neuron Morphology Miner</title>
+<script type="text/javascript" src="./js/plotly-1.21.3.min.js"></script>
+<script type="text/javascript" src="./js/ajaxRequest.js"></script>
+<link rel='stylesheet' type='text/css' href='./css/x3dom.css' />
+<script type="text/javascript" src="./js/morphology_parser.js"></script>
+<script type="text/javascript" src="./js/morphology_viewer.js"></script>
+<script type="text/javascript" src="../swcPlus/swcPlus_typeLibrary.js"></script>
+<script type="text/javascript" src="./js/vkbeautify.js"></script>
+<style>
+body{ font-family:Gotham,Arial,sans-serif;font-size:12px;line-height:1.3;color:rgb(0,0,0);background-color: #f8f8f8 }
+button,input,optgroup,select,textarea{color:inherit;font:inherit;margin:0}
+table.cmd { border-collapse: collapse }
+table.cmd th { border: 1px solid #088; text-align: left }
+table.cmd td { border: 1px solid #088 }
+ol { counter-reset: item; padding-left: 0ex }
+ol li { display: block }
+h3 { font-size:12px; margin:0.3em 0px; }
+pre { font-size: 10px }
+div { font-size:12px }
+div.menu { font-size:11px; }
+div.menu, div.select { position: relative; left: 8px; right: 8px; margin-top: 8px; margin-bottom: 8px }
+#RuntimeError { background-color: #D00; color: #FFF; padding: 2px; margin-left: 8px; margin-right: 8px; margin-bottom: 4px }
+div#RuntimeError > a:link { color: #ccf }
+div#RuntimeError > a:visited { color: #ccf }
+#metaData { display: none }
+div.select { padding: 8px; margin-right: 16px; margin-bottom: 4px; background: white; border: 1px solid #000; line-height: 2 }
+.toggle:hover { color: #D00; }
+div.toggle { font-weight: bold; color: #00D; float:left; width:4ex }
+span.toggle { color: #00D }
+span.line { font-weight: normal }
+span.group { font-style: italic }
+div.content-closed { display: none }
+div.scrollbox { height:8em; border-left: 2px solid #088; padding-left: 2px; overflow-y:scroll }
+div.result { margin-left: 0.5ex; border-left: 2px solid #0a0; padding-left:1ex }
+div.box { position: relative; padding-bottom: 50%; float: left; }
+.innerBox { position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px }
+td.right { text-align: right }
+th { text-align: left }
+
+.tooltip {
+  position: relative;
+  display: inline-block;
+}
+.tooltip .tooltiptext {
+  visibility: hidden;
+  background-color: #eea;
+  color: #000;
+  text-align: center;
+  padding: 5px 0;
+  border: 1px solid #aaa;
+  border-radius: 6px;
+ 
+  position: absolute;
+  z-index: 1;
+
+  width: 160px;
+  bottom: 100%;
+  left: 50%;
+  margin-left: -80px;
+}
+.tooltip:hover .tooltiptext {
+  visibility: visible;
+}
+.tooltip .tooltiptext::after {
+    content: " ";
+    position: absolute;
+    top: 100%; /* At the bottom of the tooltip */
+    left: 50%;
+    margin-left: -5px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #eea transparent transparent transparent;
+}
+</style>
+
+</head>
+<body onload="initViewer()">
+<h2><a href="https://plot.ly">Plot.ly</a> interactive display of neuron "<span id="fileName"></span>"</h2>
+<div id="RuntimeError" style="display:none"></div>
+
+<div style="position: relative; left: 0%; width:100%" id="X3D_CONTROLS">
+</div>
+<div>
+  <div class="box" style="width: 25%">
+    <p id="LandmarkList">
+      List of anchor points here!
+    </p>
+    <table style="width:100%; padding: 4px; background: #ffe; border: 1px solid #bbb"><col style="width:50%"><col style="width:1ex"><col>
+    <tr><td colspan="3"><i>Select an anchor point from the list or click in 3d panel to create a new anchor point.</i></td></tr>
+    <tr><th colspan="3">Selected item</th></tr>
+    <tr><td class="right">Anchor#<td>:</td></td><td id="SelectedLandmark">[new]</td></tr>
+    <tr><td class="right">Anchor name</td><td>:</td><td><input id="LandmarkName" type="text" value="?"/></td></tr>    
+    <tr><td class="right">Line#<td>:</td></td><td id="SelectedLine">-</td></tr>
+    <tr><td class="right">Point#<td>:</td></td><td id="SelectedPoint">-</td></tr>
+    <tr><td class="right">X</td><td>:</td><td id="SelectedX">-</td></tr>
+    <tr><td class="right">Y</td><td>:</td><td id="SelectedY">-</td></tr>
+    <tr><td class="right">Z</td><td>:</td><td id="SelectedZ">-</td></tr>
+    <tr><th colspan="3">Enter atlas coordinates</th></tr>
+    <tr><td colspan="3">Select a brain atlas library:
+    <select style="width:100%"><option>built-in</option></select></td>
+    <tr><td colspan="3">Select a brain atlas:
+    <select style="width:100%"><optgroup label="Mouse"><option id="mouse-FP07">mouse - FP07 (Franklin &amp; Paxinos 2007)</option></optgroup></select></td>
+    <tr><td class="right">X</td><td>:</td><td><input id="AnchorX" type="text" value="?"/></td></tr>
+    <tr><td class="right">Y</td><td>:</td><td><input id="AnchorY" type="text" value="?"/></td></tr>
+    <tr><td class="right">Z</td><td>:</td><td><input id="AnchorZ" type="text" value="?"/></td></tr>
+    <tr><td colspan="3"><input type="button" value="Show anchor point in atlas"></td></tr>
+    <tr><td colspan="3"><input type="button" value="Save anchor point"></td></tr>
+    </table>
+    <p><input type="button" value="Save neuron with anchor points (SWC+)" onclick="saveAsSwc()"></p>
+  </div>
+  <div class="box" style="width: 75%" id="X3D_DIV">
+    <div class="innerBox" id="PLOTLY" style="border: 1px solid black"></div>
+  </div>
+  <div style="visibility: hidden" id="SVG_DIV">
+  </div>
+</div>
+
+<p><a name="readme"></a><h3>Readme</h3>
+Plot.ly is an open source library for interactive scientific visualization. It includes a "3d scatter plot" option that interactively displays the coordinates of the point that is closest to the mouse pointer.
+
+<script type="text/javascript">
+//<![CDATA[
+var VIEWER
+var SCRIPTS = {}
+
+function addScript(name,src,callback) {
+  var elem = document.createElement('script')
+  elem.setAttribute('type','text/javascript')
+  elem.setAttribute('src',src)
+  SCRIPTS[name] = true
+  elem.onreadystatechange = elem.onload = callback
+  document.getElementsByTagName('head')[0].appendChild(elem);
+}
+
+function validateRPC(data) {
+  try {
+    data = JSON.parse(data)
+    if (data.error) return console.log('RPC error: '+JSON.stringify(data.error,null,2))
+    if (data.debug) console.log('RPC debug: '+JSON.stringify(data.debug,null,2))
+    return data.result
+  } catch(e) {
+    console.log('JSON error: '+data)
+  }
+}
+
+function fail(xhr) {
+  var url48 = xhr.requestUrl.length>48 ? xhr.requestUrl.substr(0,44)+' ...' : xhr.requestUrl
+  RuntimeError('Data request to <a href="'+xhr.requestUrl+'">url('+url48+')</a> failed with status code '+xhr.statusCode+'.')
+}
+
+function displayXhrResponse(xhr,fileName) {
+  var response = xhr.response
+  if (fileName.match(/\.asc|\.xml|\.swc/i)) {
+    // read text from byte-array
+    if (typeof TextDecoder !== 'undefined') {
+      var dataView = new DataView(response)
+      var decoder = new TextDecoder('utf-8')
+      response = decoder.decode(dataView)
+    } else {
+      response =  String.fromCharCode.apply(null, new Uint8Array(response,0,response.byteLength));
+    }
+  }
+  displayResult(response,fileName)
+}
+
+function saveAsSwc() {
+  if (VIEWER.tree == undefined) {
+    RuntimeError('You must first load a neuron into the viewer.');
+    return;
+  }
+  if (SCRIPTS['FileSaver']) {
+    swc = VIEWER.tree.toSWC()
+    var blob = new Blob([swc], {type:'text/swc'})
+    saveAs(blob,'morphology.swc')
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsSwc)
+  }
+}
+
+function displayText(viewer) {
+  var treeDiv = document.getElementById('HTML_TREE');
+  if (typeof viewer == 'string') {
+    treeDiv.innerHTML = 'Error in file "'+fileName+'".<pre>'+util.escapeHtml(tree)+'</pre>'
+  } else {
+    treeDiv.innerHTML = viewer.listingHtml('h2')
+  }
+}
+
+function displayGraphics(viewer) {
+  viewer.x3dSettings = {
+    somaColor: document.getElementById('somaColor').value,
+    axonColor: document.getElementById('axonColor').value,
+    dendriteColor: document.getElementById('dendriteColor').value,
+    apicalColor: document.getElementById('apicalColor').value,
+    renderMode: renderSelect.options[renderSelect.selectedIndex].value
+  }
+}
+
+function renderAsPlotly() {
+  var data = VIEWER.getPlotlyData (['tree','contour']) // data contains x,y,z,color,point#
+  VIEWER.plotlyData = data
+  var myPlot = document.getElementById('PLOTLY');
+
+  Plotly.plot(myPlot, [{
+    type: 'scatter3d',
+    mode: 'lines',
+    name: 'lines',
+    x: data[0],
+    y: data[1],
+    z: data[2],
+    opacity: 1,
+    line: {
+      width: 1,
+      color: data[3],
+      reversescale: false
+    }
+  }], { margin:{b:0,l:0,r:0,t:0} });
+  
+  Plotly.plot(myPlot, [{
+    type: 'scatter3d',
+    mode: 'markers',
+    name: 'points',
+    x: data[0],
+    y: data[1],
+    z: data[2],
+    opacity: 1,
+    marker: {
+      size: 1,
+      color: data[3],
+      reversescale: false
+    }
+  }], { margin:{b:0,l:0,r:0,t:0} });
+
+  myPlot.on('plotly_click', function(data){
+    console.log(data.points.length)
+    var pn = data.points[0].pointNumber
+    var pointId = VIEWER.plotlyData[4][pn]
+    var lines = VIEWER.tree.lines
+    for (var i=1; i<lines.nR; i++) {
+      var row = lines.row(i)
+      if (row[1]<=pointId && row[1]+row[2]>=pointId) break
+    }
+    var lineId = (i<lines.nR ? i : '-')
+    var point = VIEWER.tree.points.row(pointId)
+    document.getElementById('SelectedLine').innerHTML = lineId
+    document.getElementById('SelectedPoint').innerHTML = pointId
+    document.getElementById('SelectedX').innerHTML = point[0].toPrecision(5)
+    document.getElementById('SelectedY').innerHTML = point[1].toPrecision(5)
+    document.getElementById('SelectedZ').innerHTML = point[2].toPrecision(5)
+    console.log(pointId,VIEWER.tree.points.row(pointId),'line',i)
+  });
+}
+
+function initViewer() {
+  var tree = window.opener.VIEWER.tree
+  tree = new tree_class(
+    tree.fileName,
+    tree.fileVersion,
+    tree.metaData,
+    tree.customTypes,
+    tree.customProperties,
+    tree.points = tree.points,
+    tree.lines = tree.lines
+  )
+  VIEWER = new viewer_class(tree)
+  renderAsPlotly()
+  document.getElementById('fileName').innerHTML = tree.fileName.replace('<','lt;').replace('&','&amp;')
+  
+  // Google Analytics
+  ;(function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-83599328-1', 'auto');
+  ga('send', 'pageview');
+}
+</script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-                                                                                                                                                   /*
+/*
 This file is part of the HBP morphology viewer.
 
 HBP morphology viewer is free software: you can redistribute it and/or
@@ -16,654 +16,31 @@ along with HBP morphology viewer.
 If not, see <http://www.gnu.org/licenses/>
 */
 
+/*
+ * TO DO
+ * - [ok] Neurolucida XML: organize output
+ * - [ok] Neurolucida DAT + ASC
+ * - contours
+ * - [ok] Allen Institute Data
+ * - link to SBA (Allen Institute Data)
+ * - [x] highlight list-node (instead of alert)
+ * - SVG with polygons (using the cylinder code?)
+ * - [ok] save as SWC+
+ * 
+ * Dependencies:
+ * - morphology_parser.js, for loading/saving morphology files
+ *   - SWCplus_TypeLibrary.js, which contains the SWCplus Type Library
+ *   - vkbeautify.js, for producing pretty-print XML
+ * 
+ * Definitions:
+ * - 'Line' is non-branching set of connected points, whereby branching
+ *   is defined as having multiple children of the same Type.
+ * 
+ */
 "use strict";
-var global_tree = {}
+var VIEWER
 
-function getQueryVariable(variable) {
-  var query = window.location.search.substring(1);
-  var vars = query.split('&');
-  for (var i = 0; i < vars.length; i++) {
-    var pair = vars[i].split('=');
-    if (decodeURIComponent(pair[0]) == variable) {
-      return decodeURIComponent(pair[1]);
-    }
-  }
-}
-
-function escapeHtml(text) {
-  return String(text)
-    .replace('&', "&amp;")
-    .replace('<', "&lt;")
-    .replace('>', "&gt;")
-    .replace('"', "&quot;")
-    .replace('\'', "&#039;");
-}
-
-function toggleHtml(status) {
-  if (status=='open') return '[&#8211;]';
-  if (status=='closed') return '[+]';
-  return '[&#160;]';
-}
-
-function doToggle(elem) {
-  var status = 'disabled';
-  var contentElem = elem.parentNode.children[2];
-  if (contentElem) {
-    status = elem.className.substr(7);
-    status = (status=='open' ? 'closed' : 'open');
-    elem.className = 'toggle-'+status;
-    contentElem.className = 'content-'+status;
-  }
-  elem.innerHTML = toggleHtml(status);
-}
-
-function toggleShape(name) {
-  var node = global_tree[name]
-  if (node) node.toggleVisibility()
-}
-
-function genTable(th,data,className) {
-  var tr = th ? [th] : [];
-  if (data) {
-    var isArray = data instanceof Array;
-    if (data instanceof Object) {
-      for (var k in data) {
-        var v = data[k]
-        if (typeof(v) == 'object') v = '<pre>'+escapeHtml(JSON.stringify(v,undefined,2))+'</pre>';
-        else v = escapeHtml(v);
-        if (isArray) tr.push('<td colspan="2">'+v+'</td>');
-        else tr.push('<td>'+k+'</td><td>'+v+'</td>');
-      }
-    }
-  }
-  return '<table class="'+className+'"><tr>'+tr.join('</tr><tr>')+'</tr></table>';
-}
-
-function treeHtml(tree,tagName,level) {
-  global_tree[tree.name] = tree;
-  if (!level) level = 0;
-  if (!tagName) tagName = 'h3';
-  var status = 'disabled';
-  if (level>0) status = 'closed';
-  var toggleMe = '<div class="toggle-'+status+'" onclick="doToggle(this)">'+toggleHtml(status)+'&#160;</div>';
-  var shapeMe = ''
-  if (tree.parent) {
-    var checked = tree.visible===false ? '' : ' checked'
-    shapeMe = '<input type="checkbox"'+checked+' onchange="toggleShape(\''+escapeHtml(tree.name)+'\')"/>';
-  }
-  var startContent = '<div class="content-'+status+'">';
-  var endContent = '</div>';
-  var name = tree.name ? tree.name : (tree.info.type ? tree.info.type : '');
-  var ans = toggleMe+' '+'<'+tagName+'>'+shapeMe+' '+name+'</'+tagName+'>'+startContent;
-  ans += '<div class="result">';
-  ans += 'type: <b>'+tree.type+'</b>, attributes: <b>'+JSON.stringify(tree['info'])+'</b>';
-  if (tree._segm.length) {
-    var _segm = tree._segm
-    ans += '<pre>';
-    for (var i=0; i<_segm.length; i+=4) {
-      if (i>0) ans += '<br/>'
-      ans += '<span class="coord">'+_segm[i+0].toFixed(2)+' '+_segm[i+1].toFixed(2)+' '+_segm[i+2].toFixed(2)+' '+_segm[i+3].toFixed(2)
-    }
-  }
-  ans += '</pre>';
-
-  var branches = tree.children;
-  if (branches) {
-    var li = [];
-    for (var k in branches) {
-      li.push(treeHtml(branches[k],'h3',level+1));
-    }
-    ans += '<ol style="display:block"><li>'+li.join('</li><li>')+'</li></ol>';
-  }
-  ans += endContent;
-  return ans;
-}
-
-function handleLineClick(lineElem) {
-  alert(lineElem.id);
-}
-
-function treeToShapes(tree,color,useCylinders,projectSvg) {
-  useCylinders = false
-  var xml = []
-  var type = tree.type
-  var info = tree.info
-  if (type == 'marker') return ''
-  if (color == undefined) color = '0 0 0'
-  if (type == 'axon') color = '0 0 1'
-  if (type == 'dendrite') color = '1 0 0'
-  if (type == 'apical') color = '0.5 0 0'
-  var _segm = tree._segm
-  if (_segm.length>1) {
-    var render = (tree.visible !== false)
-    if (projectSvg) {
-      if (!render) return;
-      var rgb = color.split(' ')
-      rgb = [Math.floor(rgb[0]*255),Math.floor(rgb[1]*255),Math.floor(rgb[2]*255)]
-      rgb = 'rgb('+rgb.join(',')+')'
-      var pr0 = projectSvg[0]
-      var pr1 = projectSvg[1]
-      var project2d = function(x) {
-        return [
-          pr0[0]*x[0]+pr0[1]*x[1]+pr0[2]*x[2],
-          pr1[0]*x[0]+pr1[1]*x[1]+pr1[2]*x[2]
-        ]
-      }
-      xml.push('<g id="'+tree.name+'">')
-    } else {
-      xml.push('<Shape id="'+tree.name+'" onclick="handleLineClick(this)" render="'+render+'">')
-      xml.push('<Appearance><Material emissiveColor="'+color+'"></Material>')
-      if (!useCylinders) xml.push('<LineProperties linetype="1" linewidthScaleFactor="4" applied="true" containerField="lineProperties"></LineProperties>')
-      xml.push('</Appearance>')
-    }
-    if (useCylinders) {
-      var mn
-      if (tree.parent) {
-        var p_segm = tree.parent._segm
-        var len = p_segm.length
-        if (len) {
-          mn = [(p_segm[len-4]+_segm[0]).toFixed(2),(p_segm[len-3]+_segm[1]).toFixed(2),(p_segm[len-2]+_segm[2]).toFixed(2)]
-          xml.push('<Transform translation="'+mn.join(',')+'"><Cylinder containerField="geometry"/></Transform>')
-        }
-      }
-      for (var i=4; i<_segm.length; i+=4) {
-        var mn = [_segm[i-4]+_segm[i+0],_segm[i-3]+_segm[i+1],_segm[i-2]+_segm[i+2]]
-        xml.push('<Transform translation="'+mn.join(',')+'"><Cylinder  containerField="geometry"/></Transform>')
-      }
-    } else {
-      var points = []
-      if (tree.parent) {
-        var p_segm = tree.parent._segm
-        var len = p_segm.length
-        if (len) {
-          if (projectSvg) points.push( project2d([p_segm[len-4],p_segm[len-3],p_segm[len-2]]).join(',') )
-          else points.push( [p_segm[len-4],p_segm[len-3],p_segm[len-2]].join(',') )
-        }
-      }
-      if (projectSvg) {
-        for (var i=0; i<_segm.length; i+=4) 
-          points.push( project2d([_segm[i+0],_segm[i+1],_segm[i+2]]).join(',') )
-        xml.push('<polyline points="'+points.join(' ')+'" style="fill:none;stroke:'+rgb+';stroke-width:3"/>')
-      } else {
-        for (var i=0; i<_segm.length; i+=4) 
-          points.push( [_segm[i+0],_segm[i+1],_segm[i+2]].join(',') )
-        xml.push('<LineSet vertexCount="'+(points.length)+'" containerField="geometry">')
-        xml.push('<Coordinate point="'+points.join(' ')+'"/>')
-        xml.push('</LineSet>')
-      }
-    }
-    if (projectSvg) {
-      xml.push('</g>')
-    } else {
-      xml.push('</Shape>')
-    }
-  }
-  var branches = tree.children;
-  for (var i=0; i<branches.length; i++) {
-    xml.push(treeToShapes(branches[i],color,useCylinders,projectSvg))
-  }
-  return xml.join('\n')
-}
-
-function sqr(x) { return x*x; }
-
-function node_class(info,segm,parent) {
-  this.name = info.name
-  this.type = info.type
-  delete info.name
-  delete info.type
-  this.info = info
-  this.children = []
-  if (parent) {
-    if (this.type == 'contour') {
-      if (!parent.contours) parent.contours = new node_class({ name:'contours', type:'contours' },[],parent)
-      parent = parent.contours
-      parent.visible = false
-    } else if (this.type == 'marker') {
-      if (!parent.markers) parent.markers = new node_class({ name:'markers', type:'markers' },[],parent)
-      parent = parent.markers
-    }
-    parent.children.push(this)
-    this.visible = parent.visible
-    if (!this.name) this.name = parent.name+'.'+parent.children.length
-  } else {
-    this.nameCount = {}
-    this.typeCount = {}
-  }
-  this.parent = parent
-  if (this.type == 'contour') {
-    if (info.closed) {
-      segm.push(segm[0])
-    }
-  }
-  this._segm = this.serializeSegment(segm)
-}
-
-node_class.prototype.serializeSegment = function(segm) {
-  var i,j,segm_i
-  var _segm = new Float32Array(4*segm.length)
-  for (var i=0; i<segm.length; i++) {
-    var segm_i = segm[i]
-    for (var j=0; j<4; j++) _segm[i*4+j] = segm_i[j]
-  }
-  return _segm;
-}
-
-node_class.prototype.prepareStats = function() {
-  var wl = 0;
-  var mn,mx,ctr,x,y,z,xPrev,yPrev,zPrev;
-  var _segm = this._segm;
-  if (_segm.length>0) {
-    mn = [_segm[0],_segm[1],_segm[2]]; // copy by value
-    mx = [_segm[0],_segm[1],_segm[2]];
-    ctr = [_segm[0],_segm[1],_segm[2]];
-    xPrev = _segm[0];
-    yPrev = _segm[1];
-    zPrev = _segm[2];
-  } else {
-    xPrev = yPrev = zPrev = 0;
-  }
-  for (var i=1; i<this._segm.length; i+=4) {
-    x = _segm[4*i+0];
-    y = _segm[4*i+1];
-    z = _segm[4*i+2];
-    wl += Math.sqrt(sqr(x-xPrev)+sqr(y-yPrev)+sqr(z-zPrev));
-    ctr[0] += x;
-    ctr[1] += y;
-    ctr[2] += z;
-    if (x<mn[0]) mn[0] = x;
-    if (y<mn[1]) mn[1] = y;
-    if (z<mn[2]) mn[2] = z;
-    if (x>mx[0]) mx[0] = x;
-    if (y>mx[1]) mx[1] = y;
-    if (z>mx[2]) mx[2] = z;
-    xPrev = x;
-    yPrev = y;
-    zPrev = z;
-  }
-  if (mn !== undefined) this.limits = [mn,mx];
-  this.wireLength = wl;
-  this.centerOfMass = ctr;
-}
-
-node_class.prototype.contourName = function(v) {
-  var nc = this.parent ? this.parent.nameCount : this.nameCount;
-  if (nc[v] !== undefined) {
-    nc[v] += 1;
-    return v+' ('+nc[v]+')';
-  } else {
-    nc[v] = 0;
-    return v;
-  }
-}
-
-node_class.prototype.branchName = function(v) {
-  var tc = this.parent ? this.parent.typeCount : this.typeCount;
-  if (tc[v] !== undefined) tc[v] += 1;
-  else tc[v] = 1;
-  return v+' #'+tc[v];
-}
-
-node_class.prototype.addBranchFromRaw = function(raw) {
-  var b,i,mc,tc,tov0,v,v0;
-  var iStart = 0;
-  var info = {};
-  v = raw[0];
-  if (typeof v == 'string') {
-    if (v.charAt(0) == '@') {
-      info.type = 'marker';
-      info.shape = v.substr(1);
-      mc = this.markerCount;
-      mc = (mc === undefined ? 1 : mc+1);
-      info.name = info.shape+'@'+mc;
-      this.markerCount = mc;
-    } else {
-      info.type = 'contour';
-      info.name = this.contourName(v);
-    }
-    iStart = 1;
-  }
-  var segm = [];
-  var branches = [];
-  for (i=iStart; i<raw.length; i++) {
-    v = raw[i];
-    if (typeof v == 'string') {
-      info.type = 'marker';
-      info.text = v;
-      mc = this.markerCount;
-      mc = (mc === undefined ? 1 : mc+1);
-      info.name = this.name+'@'+mc;
-      this.markerCount = mc;
-    } else {
-      v0 = v[0];
-      tov0 = typeof v0;
-      if (tov0 == 'string') {
-        if (v.length==1) {
-          if (info.type === undefined) {
-            info.type = v0.toLowerCase();
-            info.name = this.branchName(v0)
-          } else {
-            info[v0.toLowerCase()] = true;
-          }
-        } else if (v.length==2) {
-          info[v0] = v[1];
-        }
-      } else if (tov0 == 'number') {
-        // ignore section number
-        if (v.length==5) v.pop();
-        if (v.length==4) segm.push(v);
-        else RuntimeError('ASC parser: expecting array length to be 4.')
-      } else {
-        branches.push(i);
-      }
-    }
-  }
-  var branch = new node_class(info,segm,this);
-  for (b=0; b<branches.length; b++) {
-    i = branches[b];
-    branch.addBranchFromRaw(raw[i])
-  }
-}
-
-node_class.prototype.V3DAT_index2type = {
-  0x0001: ['string',6,false],
-  0x0101: ['sample',6,false],
-  0x0102: ['?',6,false],
-  0x0103: ['sample list',6,false],
-  0x0104: ['property',6,false],
-  0x0105: ['property list',6,false],
-  0x0201: ['contour',6,false],
-  0x0202: ['tree',6,false],
-  0x0203: ['subtree',6,false],
-  0x0204: ['markerset',6,false],
-  0x0205: ['markerset list',6,false],
-  0x0206: ['spine',6,false],
-  0x0207: ['spine list',6,false],
-  0x0208: ['text',6,false],
-  0x0209: ['subtree',6,false],
-  0x0401: ['thumbnail',6,false],
-  0x0402: ['description',6,false],
-  0x0403: ['image data',6,false],
-};
-
-node_class.prototype.V3DAT_parseSample = function(bytes,pos) {
-  var x = bytes.getFloat32(pos+6,true);
-  var y = bytes.getFloat32(pos+10,true);
-  var z = bytes.getFloat32(pos+14,true);
-  var d = bytes.getFloat32(pos+18,true);
-  var c = bytes.getUint16(pos+22,true);
-  return [x,y,z,d,c];
-}
-
-node_class.prototype.V3DAT_parseSegment = function(bytes,pos) {
-  var sz = bytes.getUint32(pos+2,true);
-  var segm = [];
-  var jump = 8;
-  while (jump<sz) {
-    var tp = bytes.getUint16(pos+jump,true);
-    if (tp != 0x0101) break;
-    segm.push(this.V3DAT_parseSample(bytes,pos+jump));
-    jump += bytes.getUint32(pos+jump+2,true);
-  }
-  return segm;
-}
-
-node_class.prototype.V3DAT_parseString = function(bytes,pos) {
-  var sz = bytes.getUint32(pos+2,true);
-  var ans = '';
-  for (var i=6; i<sz; i++) ans += String.fromCharCode(bytes.getUint8(pos+i,true));
-  return ans;
-}
-
-node_class.prototype.V3DAT_parsePropertyList = function(bytes,pos) {
-  var sz = bytes.getUint32(pos+2,true);
-  var len = bytes.getUint16(pos+6,true);
-  var jump = 8;
-  var kv = {}
-  while (jump<sz) {
-    var prop_tp = bytes.getUint16(pos+jump,true);
-    if (prop_tp !== 0x0104) {
-      RuntimeError('Expecting property in property list.');
-      break;
-    }
-    var prop_sz = bytes.getUint16(pos+jump+2,true);
-    var key = this.V3DAT_parseString(bytes,pos+jump+6);
-    var str_sz = bytes.getUint32(pos+jump+6+2,true);
-    var val = true;
-    var hasValue = bytes.getUint16(pos+jump+6+str_sz,true);
-    if (hasValue) {
-      var isString = bytes.getUint16(pos+jump+6+str_sz+2,true);
-      if (isString) {
-        val = this.V3DAT_parseString(bytes,pos+jump+6+str_sz+4);
-      } else {
-        val = bytes.getFloat32(pos+jump+6+str_sz+4,true);
-      }
-    }
-    kv[key] = val;
-    jump += prop_sz;
-  }
-  return kv;
-}
-  
-node_class.prototype.V3DAT_parseContour = function(bytes,pos) {
-  var sz = bytes.getUint32(pos+2,true);
-  var jump = 6;
-  var v = this.V3DAT_parseString(bytes,pos+jump);
-  var info = { type: 'contour', name: this.contourName(v) };
-  jump += bytes.getUint32(pos+jump+2,true); // string
-  jump += 8; // ? Closed ?
-  if (bytes.getUint16(pos+jump,true) == 0x0105) {
-    var kv = this.V3DAT_parsePropertyList(bytes,pos+jump)
-    for (var k in kv) info[k] = kv[k];
-    jump += bytes.getUint32(pos+jump+2,true); // property list
-  }
-  if (bytes.getUint16(pos+jump,true) == 0x0103) {
-    var segm = this.V3DAT_parseSegment(bytes,pos+jump);
-    jump += bytes.getUint32(pos+jump+2,true); // property list
-  }    
-  var branch = new node_class(info,segm,this);
-  return sz;
-}
-
-node_class.prototype.V3DAT_parseBlock = function(bytes,pos) {
-  var tp = bytes.getUint16(pos,true);
-  var sz = bytes.getUint32(pos+2,true);
-  if (pos+sz > bytes.byteLength) {
-    RuntimeError('Data block points past end of file.')
-    return
-  }
-  var spec = this.V3DAT_index2type[tp];
-  if (!spec) {
-    RuntimeError('Unknown data type index "'+tp+'" in Neurolucida DAT file.')
-    return sz;
-  }
-  var type = spec[0];
-  var skip = spec[1];
-  var hasBlocks = spec[2];
-  var info = { 'type':type }
-  info.tp = tp;
-  info.sz = sz;
-  if (type.substr(-4) == 'list') {
-    var len = bytes.getUint16(pos+6,true);
-    if (len === 0) return info.sz;
-    info.len = len;    
-  }
-  // now parse subBlocks
-  var branch;
-  var segm = [];
-  if (type == 'markerset') {
-    sz = 6;
-    info.marker = this.V3DAT_parseString(bytes,pos+sz)
-    sz += bytes.getUint32(pos+sz+2,true); // string size
-    sz += 4; // opacity?
-    var kv = this.V3DAT_parsePropertyList(bytes,pos+sz)
-    for (var k in kv) info[k] = kv[k];
-    sz += bytes.getUint32(pos+sz+2,true); // property list
-    sz += bytes.getUint32(pos+sz+2,true); // sample list
-    //info.ignored = true;
-    //branch = new node_class(info,[],this);
-    if (!this.info.ignoredMarkers) this.info.ignoredMarkers = 1;
-    else this.info.ignoredMarkers += 1;
-  } else if (type == 'tree' || type == 'subtree') {
-    var jump = 6
-    if (type == 'tree') {
-      var typeCode = bytes.getUint16(pos+jump,true)
-      if (typeCode == 0) info.type = 'axon'
-      else if (typeCode == 1) info.type = 'dendrite'
-      else if (typeCode == 2) info.type = 'apical'
-      else info.type = 'tree'
-      info.name = this.branchName(info.type)
-      //console.log([bytes.getUint8(pos+jump,true),bytes.getUint8(pos+jump+1,true),bytes.getUint8(pos+jump+2,true),bytes.getUint8(pos+jump+3,true),bytes.getUint8(pos+jump+4,true),bytes.getUint8(pos+jump+5,true),bytes.getUint8(pos+jump+6,true),bytes.getUint8(pos+jump+7,true)]);
-      jump += 8; // Axon type, RGB
-      if (bytes.getUint16(pos+jump,true) == 0x0105) {
-        var kv = this.V3DAT_parsePropertyList(bytes,pos+jump)
-        for (var k in kv) info[k] = kv[k];
-        jump += bytes.getUint32(pos+jump+2,true); // property list
-      }    
-      if (bytes.getUint16(pos+jump,true) == 0x0101) {
-        segm.push(this.V3DAT_parseSample(bytes,pos+jump))
-        jump += bytes.getUint32(pos+jump+2,true); // sample
-      }
-    } else {
-      //console.log(this.name+' '+[bytes.getUint8(pos+jump,true),bytes.getUint8(pos+jump+1,true),bytes.getUint8(pos+jump+2,true),bytes.getUint8(pos+jump+3,true)]);
-      jump += 4; // ???, number of branches
-      if (bytes.getUint16(pos+jump,true) == 0x0103) {
-        segm = this.V3DAT_parseSegment(bytes,pos+jump);
-        jump += bytes.getUint32(pos+jump+2,true);
-      }
-    }
-    branch = new node_class(info,segm,this);
-    while (jump<sz) {
-      var tp = bytes.getUint16(pos+jump,true);
-      if (tp !== 0x0203 && tp !== 0x0204 && tp !== 0x0205 && tp !== 0x0207) {
-        RuntimeError('Expecting subtree in '+type+', but got "'+this.V3DAT_index2type[tp][0]+'".');
-        break;
-      }
-      jump += branch.V3DAT_parseBlock(bytes,pos+jump);
-    }
-    if (jump != sz) console.log(this.name+' sz '+sz+' jump '+jump)
-  } else {
-    info.ignored = true
-    info.name = info.type
-    branch = new node_class(info,[],this)
-  }
-  return sz;
-}
-
-// In the XML case, info is already filled with attributes.
-node_class.prototype.addBranchFromXml = function(info,xmlElem) {
-  var segm = [];
-  var childNodes = xmlElem.childNodes;
-  var i;
-  for (i=0; i<childNodes.length; i++) {
-    var ch = childNodes[i];
-    if (ch.tagName == 'branch') break;
-    if (ch.tagName == 'point') {
-      segm.push([ ch.getAttribute('x'),ch.getAttribute('y'),ch.getAttribute('z'),ch.getAttribute('d') ]);
-    } 
-  }
-  var branch = new node_class(info,segm,this);
-  for (i=i; i<childNodes.length; i++) {
-    var ch = childNodes[i];
-    if (ch.tagName == 'branch') {
-      branch.addBranchFromXml({},ch);
-    }
-  }
-}
-
-node_class.prototype.getLimits = function() {
-  if (this.type == 'contours') return
-  this.prepareStats();
-  var limits,mn,mx,mn_i,mx_i;
-  if (this.limits) {
-    mn = new Float32Array(this.limits[0]); // copy by value
-    mx = new Float32Array(this.limits[1]);
-  }
-  if (this.children.length) {
-    var ch = this.children[0]
-    for (var i=0; i<this.children.length; i++) {
-      limits = this.children[i].getLimits();
-      if (limits) {
-        if (mn === undefined) {
-          mn = new Float32Array(limits[0]); // copy by value
-          mx = new Float32Array(limits[1]);
-        } else {
-          mn_i = limits[0];
-          mx_i = limits[1];
-          if (mn[0]>mn_i[0]) mn[0] = mn_i[0];
-          if (mn[1]>mn_i[1]) mn[1] = mn_i[1];
-          if (mn[2]>mn_i[2]) mn[2] = mn_i[2];
-          if (mx[0]<mx_i[0]) mx[0] = mx_i[0];
-          if (mx[1]<mx_i[1]) mx[1] = mx_i[1];
-          if (mx[2]<mx_i[2]) mx[2] = mx_i[2];
-        }
-      }
-    }
-  }
-  if (mn !== undefined) {
-    return [mn,mx];
-  }
-}
-
-node_class.prototype.toggleVisibility = function(makeVisible) {
-  if (this.type == 'marker') return
-  if (makeVisible == undefined) {
-    if (this.visible == undefined) this.visible = true;
-    makeVisible = !this.visible
-  }
-  if (makeVisible != this.visible) {
-    var elem = document.getElementById(this.name)
-    if (elem) elem.setFieldValue('render',makeVisible)
-    this.visible = makeVisible;
-  }
-  for (var i=0; i<this.children.length; i++) {
-    this.children[i].toggleVisibility(makeVisible)
-  }
-}
-
-function resultToJSON(result,doParse) {
-  // encode quoted words
-  result = result.replace(/"((?:[^"\\]|\\.)*)"/mg,function($0,$1) { return '"$'+window.btoa($1)+'$"' });
-  // remove single line comments
-  result = result.replace(/\s*;.*?$/mg,'');
-  // replace | forks
-  result = result.replace(/\)(\s*)\|(\s*)\(/g,')$1][$2(');
-  result = result.replace(/\)(\s*)(["\w]+)(\s*)\|(\s*)\(/g,')$1["leaf","$2"]$3][$4(');
-  result = result.replace(/\)(\s*)(["\w]+)(\s*)\)/g,')$1["leaf","$2"]$3)');
-  // x y z d quadruplets
-  result = result.replace(/\(\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*\)/mg,'[$1,$2,$3,$4],');
-  // x y z d + section quintuplets
-  result = result.replace(/\(\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*([-.\d]+)\s*S(\d+)\s*\)/mg,'[$1,$2,$3,$4,$5],');
-  // contour names and markers
-  result = result.replace(/\("([^"]*)"/mg,'["$1",');
-  result = result.replace(/\((\w+)(\s*)\(/mg,'["@$1",$2(');
-  // attributes
-  result = result.replace(/\(\s*(\w[^\s]*)\s*\)\s*$/mg,'\n["$1"],');
-  result = result.replace(/\(\s*(\w[^\s]*)\s+"(.*)"\)\s*$/mg,function($0,$1,$2) { return '["'+$1+'",'+JSON.stringify($2)+'],' });
-  result = result.replace(/\(\s*(\w[^\s]*)\s+([^\s].*)\)\s*$/mg,function($0,$1,$2) { return '["'+$1+'",'+JSON.stringify($2)+'],' });
-  result = result.replace(/\n\s*\(\s*(\w[^\s]*)\s+([^\)]+)\)\s*\n/g,function($0,$1,$2) { return '\n["'+$1+'",\n'+JSON.stringify($2)+'],\n' });
-  // replace round by square brackets
-  result = result.replace(/$(\s*)\(/mg,'$1[');
-  result = result.replace(/\)(\s*)^/mg,']$1');
-  // remove excess commas
-  result = result.replace(/\],(\s*)\]/g,']$1]');
-  // add missing commas
-  result = result.replace(/\](\s*)\[/g,'],$1[');
-  // decode quoted words
-  result = result.replace(/"\$([^"]*)\$"/mg,function($0,$1) { return '"'+window.atob($1)+'"' });
-  
-  if (doParse) {
-    try {
-      result = JSON.parse('['+result+']');
-    } catch(err) {
-      RuntimeError('Could not convert the Neurolucida ASC file to valid JSON: '+err.msg)
-    }
-  }
-  
-  return result;
-}
-
-function RuntimeError(msg) {
+function RuntimeError(msg,fatal) {
   var errorDiv = document.getElementById('RuntimeError');
   if (errorDiv) {
     errorDiv.innerHTML = msg;
@@ -671,151 +48,960 @@ function RuntimeError(msg) {
   } else {
     alert('RuntimeError: '+msg);
   }
+  if (fatal) throw('RuntimeError: '+msg)
 }
 
-function treeFromSWC(swcStr,fileName) {
-  var index2type = ['?','soma','axon','dendrite','apical','fork point','end point','custom'];
-  // remove single line comments
-  var result = swcStr.replace(/\s*#.*?$/mg,'');
-  // remove empty lines
-  result = result.replace(/^\s*$/mg,'');
-
-  var i,n,p,tp,name,node;
-  var root = new node_class({'name':fileName,'type':'root'},[],false)
-  var lines = result.split('\n');
-  var refCount = [];
-  var values;
-  for (i=0; i<lines.length; i++) {
-    lines[i] = lines[i].replace(/^\s+/m,'').replace(/\s+$/m,'').split(/\s+/);
-    values = lines[i];
-    if (values.length < 7) continue;
-    p = values[6]; // parent point
-    if (!refCount[p]) refCount[p] = 1;
-    else refCount[p]++;
+var util = {
+  getQueryVariable: function(variable) {
+    var query = window.location.search.substring(1);
+    var vars = query.split('&');
+    for (var i = 0; i < vars.length; i++) {
+      var pair = vars[i].split('=');
+      if (decodeURIComponent(pair[0]) == variable) {
+        return decodeURIComponent(pair[1]);
+      }
+    }
+  },
+  escapeHtml: function(text) {
+    return String(text)
+      .replace('&',"&amp;")
+      .replace('<',"&lt;")
+      .replace('>',"&gt;")
+      .replace('"',"&quot;")
+      .replace('\'',"&#039;");
+  },
+  cloneArray: function(p) {
+    var q = []
+    for (var i=0; i<p.length; i++) q.push(p[i])
+    return q
+  },
+  hex2rgb: function(hex) {
+    if (hex[0] == '#') hex = hex.substr(1);
+    return [parseInt(hex.substr(0,2),16),parseInt(hex.substr(2,2),16),parseInt(hex.substr(4,2),16)];
+  },
+  hex2sfcolor: function(hex) {
+    let rgb = util.hex2rgb(hex);
+    return ''+Math.round(rgb[0]/2.55)/100+' '+Math.round(rgb[1]/2.55)/100+' '+Math.round(rgb[2]/2.55)/100;
   }
-  var p2node = [];
-  for (i=0; i<lines.length; i++) {
-    values = lines[i];
-    if (values.length < 7) continue;
-    n = values[0]; // this point
-    p = values[6]; // parent point
-    tp = values[1];
-    if (tp>7) RuntimeError('Type index must not be larger than 7 in line "'+lines[i]+'"');    
-    if (p==-1) {
-      name = index2type[tp]
-      node = new node_class({'name':root.contourName(name),'type':index2type[tp]},[],root);
-      node.tmpSegm = []
-    } else {
-      node = p2node[p];
-      if (refCount[p]>1) {
-        if (node.type == 'soma') {
-          name = root.branchName(index2type[tp])
+}
+
+function toggleStatus(elem,sibl) {
+  var contentElem = elem.parentNode.children[sibl]
+  if (contentElem) {
+    var classes = contentElem.className.split(' ')
+    var status = classes[0].substr(8);
+    status = (status=='open' ? 'closed' : 'open')
+    classes[0] = 'content-'+status
+    contentElem.className = classes.join(' ')
+  }
+  return status
+}
+
+toggleStatus.openClose = {open:'[&#8211;]',closed:'[+]'}
+toggleStatus.showHide = {open:'<b>&#9668;</b>',closed:'&#9658;'}
+
+function toggleOpenClose(elem,sibl,nodeId) {
+  var contentElem = elem.parentNode.children[sibl]
+  if (contentElem) {
+    elem.parentNode.removeChild(contentElem)
+    status = 'closed'
+  } else {
+    var contentElem = document.createElement('div')
+    contentElem.innerHTML = VIEWER.nodeHtml(nodeId)
+    contentElem.className = 'content-open'
+    elem.parentNode.appendChild(contentElem)
+    status = 'open'
+  }
+  elem.innerHTML = toggleStatus.openClose[status]
+}
+
+function toggleShowHide(elem,ch) {
+  var status = toggleStatus(elem,ch)
+  elem.innerHTML = toggleStatus.showHide[status]
+}
+
+function handleLineClick(lineElem) {
+  var lineId = lineElem.id.split('_')[1]
+  var name = VIEWER.tree && VIEWER.tree.getLineName(lineId)
+  alert('You clicked on line# '+lineId+' named "'+name+'"');
+}
+
+/* from: http://inside.mines.edu/fs_home/gmurray/ArbitraryAxisRotation/
+function rotateAboutLine(x,y,z,a,b,c,u,v,w,sinTheta,cosTheta) {
+  var I_cosTheta = 1-cosTheta
+  var xR = (a*(v*v+w+w)-u*(b*v+c*w-u*x-v*y-w*z))*I_cosTheta+x*cosTheta + (-c*v+b*w-w*y+v*z)*sinTheta
+  var yR = (b*(u*u+w*w)-v*(a*u+c*w-u*x-v*y-w*z))*I_cosTheta+y*cosTheta + ( c*u-a*w+w*x-u*z)*sinTheta
+  var zR = (c*(u*u+v*v)-w*(a*u+b*v-u*x-v*y-w*z))*I_cosTheta+z*cosTheta + (-b*u+a*v-v*x+u*y)*sinTheta
+  return [xR,yR,zR]
+}
+*/
+
+var vec3 = {
+  sqr: function(x) { 
+    return x*x; 
+  },
+  /* NOT USED
+  cross: function(a,b) { 
+    return [ a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0] ]
+  }
+  */
+  cross010: function(a) { 
+    return [ -a[2], 0, a[0] ]
+  },
+  // xyz: point to be rotated
+  // uvw: rotation axis
+  // sin(theta): sine of the rotation angle
+  // cos(theta): cosine of the rotation angle
+  rotateAboutOrigin: function(x,y,z,u,v,w,sinTheta,cosTheta) {
+    var fixed = (u*x+v*y+w*z)*(1-cosTheta)
+    var xR = u*fixed+x*cosTheta + (-w*y+v*z)*sinTheta
+    var yR = v*fixed+y*cosTheta + (+w*x-u*z)*sinTheta
+    var zR = w*fixed+z*cosTheta + (-v*x+u*y)*sinTheta
+    return [xR,yR,zR]
+  },
+  diff: function(a,b) {
+    return [b[0]-a[0],b[1]-a[1],b[2]-a[2]]
+  },
+  norm: function(a) {
+    return Math.sqrt(vec3.sqr(a[0])+vec3.sqr(a[1])+vec3.sqr(a[2]))
+  },
+  normalize: function(a) {
+    var norm = vec3.norm(a)
+    return norm>0 ? [a[0]/norm,a[1]/norm,a[2]/norm] : a
+  },
+  plus: function(a,b) {
+    return [a[0]+b[0],a[1]+b[1],a[2]+b[2]]
+  },
+  dot: function(a,b) {
+    return a[0]*b[0]+a[1]*b[1]+a[2]*b[2]
+  },
+  scale: function(a,f) {
+    return [a[0]*f,a[1]*f,a[2]*f]
+  }
+}
+
+/**
+ * @constructor
+ */
+var viewer_class = function(tree) {
+  // nodeList rows contain:
+  //   0 lineId,
+  //   1 groupId
+  //   2 parentId
+  //   3 firstChildId
+  //   4 status (0 = inherit, 1 = visible, 9 = hidden)]
+  this.tree = tree
+  VIEWER = this // global variable VIEWER used in callback functions
+  this.id2group = ['']
+  this.createNodeList()
+  this.spatialRegistration = {
+    atlases: {},
+    transforms: {}
+  }
+  this.interactiveMode = true
+}
+
+viewer_class.prototype.inheritedVisibility = function(nodeId) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  var node = this.nodeList.row(nodeId)
+  var visibility = node[4]
+  if (visibility === 0) { // inherit
+    var parentId = node[2]
+    return (parentId > 0 ? this.inheritedVisibility(parentId) : 1)
+  }
+  return visibility
+}
+
+viewer_class.prototype.showNode = function(nodeId,makeVisible) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  var node = this.nodeList.row(nodeId)
+  var nodeElem = document.getElementById('node_'+nodeId)
+  if (nodeElem) {
+    nodeElem.checked = makeVisible
+    var visibility = node[4]
+    nodeElem.style.opacity = (visibility === 0 ? '0.5' : '1.0')
+  }
+  var lineId = node[0]
+  if (lineId) {
+    var xElem = document.getElementById('shape_'+lineId)
+    if (xElem) { xElem.render = makeVisible }
+    else if (makeVisible) this.insertLine(lineId)
+  }
+  // apply visibility to child nodes
+  var childId = node[3]
+  while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+    var child = this.nodeList.row(childId)
+    // only children with visibility '0:inherit' need to be updated
+    if (child[4] === 0) this.showNode(childId,makeVisible)
+    childId += 1
+  }
+}
+
+viewer_class.prototype.toggleNode = function(nodeId) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  var node = this.nodeList.row(nodeId)
+  var inherit = this.inheritedVisibility(node[2])
+  var visibility = node[4]
+  if (visibility === inherit || visibility === 0) visibility = 10-inherit // 9 means explicitly do not render
+  else visibility = 0
+  node[4] = visibility
+  this.showNode(nodeId,(visibility || inherit) === 1)
+}
+
+viewer_class.prototype.defaultGroupVisibility = {
+  // 0: inherit, 1: show, 9: hide
+  "contours": 9,
+  "borders": 9,
+  "markers": 9,
+  "spines": 9
+}
+
+viewer_class.prototype.getNodeName = function(nodeId) {
+  var node = this.nodeList.row(nodeId)
+  if (node[0]) return this.tree.getLineName(node[0])
+  if (node[1]) return this.id2group[node[1]]
+  return '?'
+}
+
+viewer_class.prototype.createChildNodes = function(nodeId) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  var node = this.nodeList.row(nodeId)
+  if (nodeId === 0 || node[0] > 0) { // if node contains a line
+    var parentGroup = this.id2group[node[1]]
+    var lineId = node[0]
+    var groups = this.tree.getGroups(this.tree.children[lineId])
+    if (groups) {
+      node[3] = this.nodeList.nR // set firstChild
+      var group
+      for (var g in groups) {
+        var visibility = this.defaultGroupVisibility[g] || 0
+        members = groups[g]
+        if (members.length > 1 && g !== '' && g !== parentGroup) {
+          var len = this.id2group.push(g)
+          this.nodeList.pushRow([0,len-1,nodeId,0,visibility])
         } else {
-          name = undefined
+          var groupId = (g == parentGroup ? node[1] : this.id2group.push(g)-1)
+          for (var i=0; i<members.length; i++) {
+            var childId = members[i]
+            this.nodeList.pushRow([childId,groupId,nodeId,0,visibility])
+          }
         }
-        node = new node_class({'name':name,'type':index2type[tp]},[],node);
-        node.tmpSegm = []
       }
     }
-    p2node[n] = node;
-    node.tmpSegm.push([values[2],values[3],values[4],values[5]]);
-    if (refCount[n] !== 1) {
-      if (node.tmpSegm) {
-        node._segm = node.serializeSegment(node.tmpSegm)
-        delete node.tmpSegm
+  } else {
+    var parentNode = this.nodeList.row(node[2])
+    var groups = this.tree.getGroups(this.tree.children[parentNode[0]])
+    var g = this.id2group[node[1]]
+    if (g) {
+      var members = groups[g]
+      node[3] = this.nodeList.nR // set firstChild
+      for (var i=0; i<members.length; i++) {
+        var childId = members[i]
+        this.nodeList.pushRow([childId,node[1],nodeId,0,0])
       }
     }
   }
-  return root;
+  return node[3] // firstChild
 }
 
-function treeFromNeurolucidaASC(ascStr,fileName) {
-  var doParse = true;
-  var raw = resultToJSON(ascStr,doParse);
-  if (!doParse) {
-    document.write('<pre>'+escapeHtml(raw)+'</pre>');
-    return;
+viewer_class.prototype.createNodeList = function(nodeId) {
+  nodeId = nodeId || 0
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  if (!nodeId) {
+    this.nodeList = new varMatrix_class(Uint32Array,5)
+    this.nodeList.pushRow([0,0,0,0,1])
   }
-  var info = {'name':fileName,'type':'root'};
-  var i,iStart,v,key;
-  iStart = 0;
-  for (var i=0; i<raw.length; i++) {
-    v = raw[i];
-    if (!v.length) break;
-    var key = v[0].toLowerCase();
-    if (v.length==1) {
-      info[key] = true;
-    } else if (v.length==2) {
-      if (key != 'thumbnail') info[key] = v[1];
+  var childId = this.createChildNodes(nodeId)
+  if (childId) {
+    while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+      this.createNodeList(childId);
+      childId += 1
+    }
+  }
+}
+
+viewer_class.prototype.nodeHtml = function(nodeId) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+  var node = this.nodeList.row(nodeId)
+  var lineId = node[0]
+  var ans = '<ol class="node" style="display:block">'
+  if (lineId) {
+    var line = this.tree.lines.row(lineId)
+    var tp = line[0]
+    var firstPoint = line[1]
+    var numPoints = line[2]
+    var attrs = this.tree.typeMap[tp] || {}
+    var op = this.tree.objectPropertySets[firstPoint]
+    if (op) for (var i=0; i<op.length; i++) for (var k in op[i]) { attrs[k] = op[i][k] } 
+    if (attrs) {
+      var toggleSwitch = '<span class="toggle" onclick="toggleShowHide(this,1)">'+toggleStatus.showHide.closed+'</span>';
+      ans += '<li>Attributes ('+Object.keys(attrs).length+')&nbsp;'+toggleSwitch+'<div class="content-closed"><pre>'+JSON.stringify(attrs,null,2)+'</pre></li>'
+    }
+    var toggleSwitch = '<span class="toggle" onclick="toggleShowHide(this,1)">'+toggleStatus.showHide.closed+'</span>';
+    ans += '<li>Points ('+numPoints+')&nbsp;'+toggleSwitch+'<div class="content-closed">'
+    var points = this.tree.points
+    ans += '<pre>'
+    for (var i=firstPoint; i<=firstPoint+numPoints-1; i++) {
+      if (i>firstPoint) ans += '<br/>'
+      var pt = points.row(i)
+      ans += pt[0].toFixed(2)+' '+pt[1].toFixed(2)+' '+pt[2].toFixed(2)+' '+pt[3].toFixed(2)
+    }
+    ans += '</pre>'
+    ans += '</div></li>'
+  }
+
+  //var firstChildId = this.createChildNodes(nodeId)
+  var childId = node[3] // firstChild
+  if (childId) {
+    var li = [];
+    while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+      li.push(this.listingHtml('h3',childId));
+      childId += 1
+    }
+    ans += '<li>'+li.join('</li><li>')+'</li>';
+  }
+  ans += '</ol>';
+  return nodeId ? '<div class="result">'+ans+'</div>' : ans
+}
+
+viewer_class.prototype.listingHtml = function(tagName,nodeId) {
+  // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:status]
+  nodeId = nodeId || 0
+  var node = this.nodeList.row(nodeId)
+  var lineId = node[0]
+  
+  if (!tagName) tagName = 'h3';
+  var status = 'open';
+  if (node[2]>0)  status = 'closed'
+  if (nodeId>0) {
+    var toggleSwitch = '<div class="toggle" onclick="toggleOpenClose(this,2,'+nodeId+')">'+toggleStatus.openClose[status]+'&#160;</div>';
+    var checked = (this.inheritedVisibility(nodeId) === 1) ? ' checked' : ''
+    if (node[4] === 0) checked += ' style="opacity: 0.7"'
+    var visibilitySwitch = '<input id="node_'+nodeId+'" type="checkbox"'+checked+' onchange="VIEWER.toggleNode(\''+nodeId+'\')"/>'
+    var name = this.getNodeName(nodeId)
+    var ans = toggleSwitch+' '+'<'+tagName+'>'+visibilitySwitch+' <span class="'+(lineId>0 ? 'line' : 'group')+'">'+name+(lineId>0 ? '' : '&nbsp;...')+'</span></'+tagName+'>';
+  } else {
+    var ans = '<'+tagName+'>'+this.tree.fileName+'</'+tagName+'>';
+  }
+  if (status == 'open') ans += this.nodeHtml(nodeId)
+  return ans;
+}
+
+viewer_class.prototype.insertLine = function(lineId) {
+  var line = this.tree.lines.row(lineId)
+  var parentLineId = line[3]
+  var parentElem = document.getElementById('X3D_SCENE')
+  if (parentElem) {
+    var lineElem = document.createElementNS("http://www.web3d.org/specifications/x3d-3.3.xsd",'Group')
+    lineElem.innerHTML = this.lineXML(lineId)
+    parentElem.appendChild(lineElem)
+  } else {
+    RuntimeError('X3D: Need root X3D element with id "X3D_SCENE".')
+  }
+}
+
+viewer_class.prototype.lineSVG = function(projectSvg,lineId) {
+  var points = this.tree.points
+  var lines = this.tree.lines
+  var line = lines.row(lineId)
+  var tp = line[0] // type
+  var firstPoint = line[1] // first point
+  var numPoints = line[2] // line length
+  var p = line[3] // parent line
+  var attrs = this.tree.typeMap[tp]
+  var swcType = attrs.__type__
+  var geom = attrs.geometry
+  
+  var x3dSettings = (this.x3dSettings || {})
+  var color = ('0 0 0')
+  if (swcType == 'soma') color = (x3dSettings.somaColor || '0 0.9 0')
+  else if (swcType == 'axon') color = (x3dSettings.axonColor || '0 0 1')
+  else if (swcType == 'dendrite') color = (x3dSettings.dendriteColor || '1 0 0')
+  else if (swcType == 'apical') color = (x3dSettings.apicalColor || '0.5 0 0')
+  else if (swcType == 'spine') color = (x3dSettings.spineColor || '0.2 0.8 0.0')
+  else if (geom == 'marker') color = (x3dSettings.markerColor || '0 0 0')
+
+  var xml = []
+  // open the svg shape
+  if (geom != 'tree' && geom != 'contour') return;
+  var rgb = color
+  if (rgb.substr(0,1) != '#') {
+    rgb = color.split(' ')
+    rgb = [Math.floor(rgb[0]*255),Math.floor(rgb[1]*255),Math.floor(rgb[2]*255)]
+    rgb = 'rgb('+rgb.join(',')+')'
+  }
+  var pr0 = projectSvg[0]
+  var pr1 = projectSvg[1]
+  var project2d = function(x) {
+    return [
+      pr0[0]*x[0]+pr0[1]*x[1]+pr0[2]*x[2],
+      pr1[0]*x[0]+pr1[1]*x[1]+pr1[2]*x[2]
+    ]
+  }
+  xml.push('<g id="'+this.tree.getLineName(lineId)+'">')
+  // insert geometries
+  var coords = []
+
+  // geometries are lines
+  if (geom == 'tree' && p) {
+    var p_line = lines.row(p)
+    var p_firstPoint = p_line[1]
+    var p_len = p_line[2]
+    var p_lastPoint = p_firstPoint+p_len-1
+    var p_pt = points.row(p_lastPoint)
+    if (projectSvg) coords.push( project2d([p_pt[0],p_pt[1],p_pt[2]]).join(' ') )
+    else coords.push( [p_pt[0],p_pt[1],p_pt[2]].join(' ') )
+  }
+  var closed = (geom=='contour')
+  var w = 0
+  for (var i=firstPoint; i<firstPoint+numPoints; i++) {
+    var pt = points.row(i)
+    coords.push( project2d([pt[0],pt[1],pt[2]]).join(' ') )
+    w += pt[3]*2 // radius => diameter
+  }
+  w /= numPoints
+  var tag = (closed ? 'polygon' : 'polyline')
+  var fill = (closed ? rgb : 'none')
+  xml.push('<'+tag+' points="'+coords.join(' ')+'" style="fill:'+fill+';stroke:'+rgb+';stroke-width:'+w+'"/>')
+  xml.push('</g>')
+  return xml.join('\n')
+}
+
+viewer_class.prototype.renderSvg = function(projectSvg,nodeId,parentVisibility, xml) {
+  if (!nodeId) {
+    nodeId = 0
+    xml = []
+    parentVisibility = true
+  }
+  var node = this.nodeList.row(nodeId)
+  var visibility = node[4] || parentVisibility // 0:inherit, 1:on, 9:off
+  if (visibility === 1) {
+    var lineId = node[0] // line number
+    if (lineId) xml.push(this.lineSVG(projectSvg,lineId))
+  }
+  
+  var childId = node[3] // firstChild
+  if (childId) {
+    while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+      this.renderSvg(projectSvg,childId,visibility, xml)
+      childId += 1
+    }
+  }
+
+  if (nodeId == 0) return xml.join('\n')
+}
+
+viewer_class.prototype.lineXML = function(lineId) {
+  var points = this.tree.points
+  var lines = this.tree.lines
+  var line = lines.row(lineId)
+  var tp = line[0] // type
+  var firstPoint = line[1] // first point
+  var numPoints = line[2] // line length
+  var lastPoint = line[1]+line[2]-1
+  var p = line[3] // parent line
+  var attrs = this.tree.typeMap[tp]
+  var swcType = attrs.__type__
+  var geom = attrs.geometry
+  
+  var x3dSettings = (this.x3dSettings || {})
+  var color = ('0 0 0')
+  if (swcType == 'soma') color = (x3dSettings.somaColor || '0 0.9 0')
+  else if (swcType == 'axon') color = (x3dSettings.axonColor || '0 0 1')
+  else if (swcType == 'dendrite') color = (x3dSettings.dendriteColor || '1 0 0')
+  else if (swcType == 'apical') color = (x3dSettings.apicalColor || '0.5 0 0')
+  else if (swcType == 'spine') color = (x3dSettings.spineColor || '0.2 0.8 0')
+  else if (geom == 'marker') color = (x3dSettings.markerColor || '0 0 0')
+  if (color.charAt(0) == '#') color = util.hex2sfcolor(color);
+
+  var renderMode = (x3dSettings.renderMode || 'thin')
+  // draw soma as cones
+  if (swcType == 'soma' && geom == 'tree' && (renderMode=='thin' || renderMode=='thick')) renderMode = 'cones'
+  var xml = []
+  // open the x3d shape
+  xml.push('<Group'+ (this.interactiveMode ? ' id="shape_'+lineId+'" onclick="handleLineClick(this)">' : ' DEF="shape_'+lineId+'">'));
+  // insert geometries
+  var coords = []
+  if (geom == 'contour' || swcType == 'marker' || swcType == 'spine' || renderMode == 'thin' || renderMode == 'thick') {
+    // geometries are lines
+    if (geom == 'tree' && p) {
+      var p_line = lines.row(p)
+      var p_firstPoint = p_line[1]
+      var p_numPoints = p_line[2]
+      var p_lastPoint = p_firstPoint+p_numPoints-1
+      var p_pt = points.row(p_lastPoint)
+      coords.push( [p_pt[0],p_pt[1],p_pt[2]].join(' ') )
+    }
+    var mn = this.tree.boundingBox.mn, mx = this.tree.boundingBox.mx
+    var markerSize = (mx[0]-mn[0]+mx[1]-mn[1]+mx[2]-mn[2])/3
+    markerSize /= (swcType == 'spine' ? 200 : 60) 
+//    markerSize = [markerSize,markerSize,markerSize]
+    var closed = (geom=='contour')
+    if (geom == 'marker') {
+      for (var i=firstPoint; i<=lastPoint; i++) {
+        var pt = points.row(i)
+        xml.push('<Transform translation="'+pt.slice(0,3).join(' ')+'"><Shape><Appearance>'+
+          '<Material diffuseColor="'+color+'" specularColor="'+color+'" transparency=".4"></Material></Appearance>'+
+          '<Sphere radius="'+markerSize+'"></Sphere></Shape></Transform>'
+        )
+      }
     } else {
-      iStart = i;
-      break;
+      xml.push('<Shape><Appearance><Material emissiveColor="'+color+'"></Material>')
+      if (renderMode == 'thick') xml.push('<LineProperties linetype="1" linewidthScaleFactor="4" applied="true"></LineProperties>')
+      xml.push('</Appearance>')
+      for (var i=firstPoint; i<=lastPoint; i++) {
+        var pt = points.row(i)
+        coords.push( [pt[0],pt[1],pt[2]].join(' ') )
+      }
+      if (closed) coords.push(coords[0])
+      xml.push('<LineSet vertexCount="'+(coords.length)+'" containerField="geometry">')
+      xml.push('<Coordinate point="'+coords.join(' ')+'"/>')
+      xml.push('</LineSet>')
+      xml.push('</Shape>')
+    }
+  } else {
+    // geometries are cones, approximated as an indexed face set
+    var a,rA,b,rB,c,rC,u_ab,u_bc,skip=0
+    if (p) {
+      var p_line = lines.row(p)
+      var p_firstPoint = p_line[1]
+      var p_numPoints = p_line[2]
+      var p_lastPoint = p_firstPoint+p_numPoints-1
+      a = Array.from(points.row(p_lastPoint))
+      rA = a.pop()
+      b = Array.from(points.row(firstPoint))
+      rB = b.pop()
+      if (p_line[0] != line[0]) rA = rB // so that axons do not inherit huge radius from soma
+    }
+    if (!b && numPoints > 0) {
+      a = Array.from(points.row(firstPoint))
+      rA = a.pop()
+      b = Array.from(points.row(firstPoint+1))
+      rB = b.pop()
+      skip=1
+    }
+    if (b) {
+      var circles = []
+      u_ab = vec3.normalize(vec3.diff(a,b))
+      var circle = x3d.startCircle(a,rA,u_ab)
+      circles.push( circle )
+      var prevCircle = circle
+      for (var i=firstPoint+skip; i<=lastPoint; i++) {
+        if (i<lastPoint) {
+          c = Array.from(points.row(i+1))
+          rC = c.pop()
+          u_bc = vec3.normalize(vec3.diff(b,c))
+          if (vec3.dot(u_ab,u_bc)<0) {
+            var u_extra = vec3.normalize(vec3.plus(u_ab,u_bc))
+            circle = x3d.nextCircle(prevCircle,rA,u_ab,b,rB,u_extra)
+            circles.push(circle)
+            prevCircle = circle
+            rA = rB
+            u_ab = u_extra
+          }
+        } else {
+          u_bc = u_ab
+        }
+        circle = x3d.nextCircle(prevCircle,rA,u_ab,b,rB,u_bc)
+        var corrCircle = []
+        for (var j=0; j<circle.length; j++) {
+          if (vec3.dot( vec3.diff(prevCircle[j],circle[j]),u_ab ) < 0) {
+            corrCircle.push(prevCircle[j])
+          } else {
+            corrCircle.push(circle[j])
+          }
+        }
+        circles.push(corrCircle)
+        rA = rB
+        u_ab = u_bc
+        b = c
+        rB = rC
+        prevCircle = circle
+      }
+
+      var coords = []
+      var indices = []
+      var circle = circles[0]
+      var len = circle.length
+      coords.push(circle.map(function(a) { return a.join(' ') }).join(' '))
+      for (var i=len-1; i>=0; i--) {
+        indices.push(i)
+      }
+      indices.push(-1)
+      var offset = len;
+      for (var c=1; c<circles.length; c++) {
+        circle = circles[c]
+        len = circle.length
+        coords.push(circle.map(function(a) { return a.join(' ') }).join(' '))
+        if (c==circles.length-1) {
+          for (var i=0; i<len; i++) {
+            indices.push(offset+i)
+          }
+          indices.push(-1)
+        } 
+        for (var i=0;i<len-1;i++) {
+          indices.push([offset-len+i+1,offset+i+1,offset+i,offset-len+i].join(' '))
+          indices.push(-1)
+        }
+        indices.push([offset-len,offset,offset+len-1,offset-1].join(' '))
+        indices.push(-1)
+        offset += len
+      }
+      xml.push('<Shape>')
+      xml.push('<Appearance><Material diffuseColor="'+color+'" specularColor="1 1 1"></Material>')
+      xml.push('</Appearance>')
+      xml.push('<IndexedFaceSet creaseAngle="'+(renderMode == 'cones_smooth' ? '0.1' : '0')+'" colorPerVertex="false" coordIndex="'+indices.join(' ')+'" solid="true">')
+      xml.push('<Coordinate point="'+coords.join(' ')+'"></Coordinate>')
+      xml.push('</IndexedFaceSet>')
+      xml.push('</Shape>')
     }
   }
-  var root = new node_class(info,[],false);
-  for (var i=iStart; i<raw.length; i++) {
-    root.addBranchFromRaw(raw[i]);
-  }
-  return root;
+  xml.push('</Group>')
+  return xml.join('\n')
 }
 
-function treeFromNeurolucidaXML(xmlStr,fileName) {
-  xmlStr = xmlStr.replace('xmlns="http://www.mbfbioscience.com/2007/neurolucida"','');
-  var parser = new DOMParser();
-  var xmlDoc = parser.parseFromString(xmlStr,"text/xml");
-  var info = { name: fileName, type: 'root' };
-  var root = new node_class(info,[],false);
-  var contours = xmlDoc.evaluate('/mbf/contour', xmlDoc, null, XPathResult.ANY_TYPE, null);
-  var contour = contours.iterateNext();
-  while (contour) {
-    var v = contour.getAttribute('name')
-    info = { 'name': root.contourName(v), 'type': 'contour' };
-    if (contour.getAttribute('closed') == "true") info['closed'] = true;
-    root.addBranchFromXml(info,contour);
-    contour = contours.iterateNext();
-  }
-  var trees = xmlDoc.evaluate('/mbf/tree', xmlDoc, null, XPathResult.ANY_TYPE, null);
-  var treeElem = trees.iterateNext();
-  while (treeElem) {
-    var type = treeElem.getAttribute('type');
-    var leaf = treeElem.getAttribute('leaf');
-    info = { 'name':root.branchName(type), 'type': type.toLowerCase() };
-    if (leaf) info.leaf = leaf;
-    root.addBranchFromXml(info,treeElem);
-    treeElem = trees.iterateNext();
-  }
-  return root;
+viewer_class.prototype.meshXML = function(meshId,vertices_csv,faces_csv) {
+  var xml = []
+  xml.push('<Shape id="'+meshId+'">')
+  xml.push('<IndexedFaceSet creaseAngle="0.785" solid="true" colorPerVertex="false" normalPerVertex="false" coordIndex="'+faces_csv.split('\n').join(' -1\n')+'">')
+  xml.push('  <Coordinate point="'+vertices_csv+'"/>')
+  xml.push('</IndexedFaceSet>')
+  xml.push('<Appearance alphaClipThreshold="0.05"><Material diffuseColor="0.439216 0.631373 1" transparency="0.94"/><DepthMode readOnly="true"></DepthMode></Appearance>')
+  xml.push('</Shape>')
+  return xml.join('\n')  
 }
 
-function treeFromNeurolucidaDAT(arrayBuf,fileName) {
-  var info = { name: fileName, type: 'root' };
-  var root = new node_class(info,[],false);
-  var bytes = new DataView(arrayBuf);
-  var head = new Uint8Array(arrayBuf,0,70);
-  var token = 'V3 DAT file';
-  for (var i=0; i<token.length; i++) {
-    if (token.charCodeAt(i) != head[i+1]) {
-      RuntimeError('File does not have a valid Neurolucida V3 DAT header');
-      return root;
+viewer_class.prototype.renderTree = function(nodeId,parentVisibility, xml) {
+  if (!nodeId) {
+    nodeId = 0
+    xml = []
+    parentVisibility = true
+  }
+  var node = this.nodeList.row(nodeId)
+  var visibility = node[4] || parentVisibility // 0:inherit, 1:on, 9:off
+  if (visibility === 1) {
+    var lineId = node[0] // line number
+    if (lineId) xml.push(this.lineXML(lineId))
+  }
+  
+  var childId = node[3] // firstChild
+  if (childId) {
+    while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+      this.renderTree(childId,visibility, xml)
+      childId += 1
     }
   }
-  var pos = 70;
-  while (pos+8<bytes.byteLength) {
-    var tp = bytes.getUint16(pos,true);
-    var sz;
-    if (tp == 0x0105) {
-      sz = bytes.getUint32(pos+2,true);
-      var kv = root.V3DAT_parsePropertyList(bytes,pos);
-      for (var k in kv) info[k] = kv[k];
-    } else if (tp == 0x0201) {
-      sz = root.V3DAT_parseContour(bytes,pos);
-    } else {
-      sz = root.V3DAT_parseBlock(bytes,pos);
-    }
-    pos += sz;
-    if (bytes.getUint32(pos,true) == 0xAABBCCDD) break;
+  
+  // render previously selected slices here?
+  
+  return xml.join('\n')
+}
+
+viewer_class.prototype.renderImage = function(imgStack,i,transformations) {
+  if (transformations) {
+    var tf = transformations[0]
+    var samples = assertArray(tf.sample)
+    if (samples.length != 2) throw('Invalid number of samples')
+    var img = imgStack.image[i]
+    var bottom0 = imgStack.pixHeight-samples[0].top
+    var bottom1 = imgStack.pixHeight-samples[1].top
+    var a11 = (1.0*samples[1].x-samples[0].x)/(samples[1].left-samples[0].left)
+    var a22 = (1.0*samples[1].y-samples[0].y)/(bottom1-bottom0)
+    var b1 = samples[0].x-a11*samples[0].left
+    var b2 = samples[0].y-a22*bottom0
+    var AbT = [
+      [a11,0,0],
+      [0,0,0],
+      [0,0,a22],
+      [b1,parseFloat(img.z),b2]
+    ]
   }
-  return root;  
+  var url = img.url
+  if (url.charAt(0) == '.' && imgStack.__atlasUrl__) {
+    var atlasUrl = (imgStack.__atlasUrl__).split('/')
+    atlasUrl.pop()
+    url = atlasUrl.join('/')+url.substr(1)
+  }
+  var xml = (
+    '<MatrixTransform matrix="'+AbT[0].join(' ')+' 0 '+AbT[1].join(' ')+' 0 '+AbT[2].join(' ')+' 0 '+AbT[3].join(' ')+' 1">'+
+    '<Shape>'+
+    '  <IndexedFaceSet solid="false" coordIndex="0 1 2 3">'+
+    '    <Coordinate point="'+imgStack.pixWidth+' 0 '+imgStack.pixHeight+' 0 0 '+imgStack.pixHeight+' 0 0 0 '+imgStack.pixWidth+' 0 0"/>'+
+    '  </IndexedFaceSet>'+
+    '  <Appearance>'+
+    '    <ImageTexture repeatS="false" repeatT="false" scale="false" url="'+url+'"/>'+
+    '  </Appearance>'+
+    '</Shape>'+
+    '</MatrixTransform>'
+  )
+  return xml
+}
+
+viewer_class.prototype.renderSlice = function(sliceAxis,sliceCoord) {
+  // depending on the srs, download an atlas json file
+  var atlasSpec
+  if (this.tree.srs == 'FP07-bregma') {
+    atlasSpec = {
+      slices: [
+        { id:38, y:-0.82, img:"./FP07/Mouse_Brain_Atlas_37.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]]
+        },
+        { id:42, y:-1.34, img:"./FP07/Mouse_Brain_Atlas_41.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]]
+        },
+        { id:46, y:-1.82, img:"./FP07/Mouse_Brain_Atlas_45.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+        { id:50, y:-2.30, img:"./FP07/Mouse_Brain_Atlas_49.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+        { id:54, y:-2.80, img:"./FP07/Mouse_Brain_Atlas_53.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+        { id:58, y:-3.28, img:"./FP07/Mouse_Brain_Atlas_57.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+        { id:62, y:-3.80, img:"./FP07/Mouse_Brain_Atlas_61.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+        { id:66, y:-4.24, img:"./FP07/Mouse_Brain_Atlas_65.jpg", 
+          pixWidth:940, pixHeight:723, 
+          samples: [[105,723-630,4,6],[832,723-84,-4,0]],
+        },
+      ]
+    }
+  }
+  if (atlasSpec) {
+    var nearestSlice, smallestDist
+    for (var i=0; i<atlasSpec.slices.length; i++) {
+      var slice = atlasSpec.slices[i]
+      if (slice[sliceAxis] !== undefined) {
+        var dist = Math.abs(slice[sliceAxis]-sliceCoord)
+        if (smallestDist === undefined || smallestDist>dist) {
+          smallestDist = dist
+          nearestSlice = slice
+        }
+      }
+      console.log('The nearest slice is '+JSON.stringify(nearestSlice)) 
+    }
+    var AbT = nearestSlice.AbT
+    if (!AbT) {
+      var samples = nearestSlice.samples
+      if (samples) {
+        var a11 = (1.0*samples[1][2]-samples[0][2])/(samples[1][0]-samples[0][0])
+        var a22 = (1.0*samples[1][3]-samples[0][3])/(samples[1][1]-samples[0][1])
+        var b1 = samples[0][2]-a11*samples[0][0]
+        var b2 = samples[0][3]-a22*samples[0][1] 
+        AbT = [
+          [a11,0,0],
+          [0,0,0],
+          [0,0,a22],
+          [b1,nearestSlice.y,b2],
+        ]
+      }
+    }
+    var xml = (
+      '<MatrixTransform matrix="'+AbT[0].join(' ')+' 0 '+AbT[1].join(' ')+' 0 '+AbT[2].join(' ')+' 0 '+AbT[3].join(' ')+' 1">'+
+      '<Shape>'+
+      '  <IndexedFaceSet solid="false" coordIndex="0 1 2 3">'+
+      '    <Coordinate point="'+nearestSlice.pixWidth+' 0 '+nearestSlice.pixHeight+' 0 0 '+nearestSlice.pixHeight+' 0 0 0 '+nearestSlice.pixWidth+' 0 0"/>'+
+      '  </IndexedFaceSet>'+
+      '  <Appearance>'+
+      '    <ImageTexture repeatS="false" repeatT="false" scale="false" url="'+nearestSlice.img+'"/>'+
+      '  </Appearance>'+
+      '</Shape>'+
+      '</MatrixTransform>'
+    )
+    return xml
+  } else {
+    console.log('No slice for srs '+this.tree.srs)
+    return ''
+  }
+}
+
+viewer_class.prototype.addLineData = function(xyz, line) {
+  var points = this.tree.points
+  var lines = this.tree.lines
+  var tp = line[0] // type
+  var firstPoint = line[1] // first point
+  var numPoints = line[2] // line length
+  var p = line[3] // parent line
+  var attrs = this.tree.typeMap[tp]
+  var swcType = attrs.__type__
+  var geom = attrs.geometry
+  
+  var x3dSettings = (this.x3dSettings || {})
+  var color = ('0 0 0')
+  if (swcType == 'soma') color = (x3dSettings.somaColor || '0 0.9 0')
+  if (swcType == 'axon') color = (x3dSettings.axonColor || '0 0 1')
+  if (swcType == 'dendrite') color = (x3dSettings.dendriteColor || '1 0 0')
+  if (swcType == 'apical') color = (x3dSettings.apicalColor || '0.5 0 0')
+  if (geom == 'marker') color = (x3dSettings.markerColor || '0 0 0')
+
+  var rgb = color
+  if (rgb.substr(0,1) != '#') {
+    rgb = color.split(' ')
+    rgb = [Math.floor(rgb[0]*255),Math.floor(rgb[1]*255),Math.floor(rgb[2]*255)]
+    rgb = 'rgb('+rgb.join(',')+')'
+  }
+
+  // geometries are lines
+  if (geom == 'tree' && p) {
+    var p_line = lines.row(p)
+    var p_firstPoint = p_line[1]
+    var p_numPoints = p_line[2]
+    var p_lastPoint = p_firstPoint+p_numPoints-1
+    var p_pt = points.row(p_lastPoint)
+    xyz[0].push(p_pt[0])
+    xyz[1].push(p_pt[1])
+    xyz[2].push(p_pt[2])
+    xyz[3].push(rgb)
+    xyz[4].push(p_lastPoint)
+  }
+  var closed = (geom=='contour')
+  var w = 0
+  for (var i=firstPoint; i<firstPoint+numPoints; i++) {
+    var pt = points.row(i)
+    xyz[0].push(pt[0])
+    xyz[1].push(pt[1])
+    xyz[2].push(pt[2])
+    xyz[3].push(rgb)
+    xyz[4].push(i)
+    w += pt[3]*2 // radius => diameter
+  }
+  w /= numPoints
+  xyz[0].push(null)
+  xyz[1].push(null)
+  xyz[2].push(null)
+  xyz[3].push(null)
+  xyz[4].push(null)
+}
+
+viewer_class.prototype.getPlotlyData = function(geoms, nodeId,parentVisibility, xyzc) {
+  if (!geoms) geoms = ['tree','contour']
+  if (!nodeId) {
+    nodeId = 0
+    xyzc = [[],[],[],[],[]]
+    parentVisibility = true
+  }
+  var node = this.nodeList.row(nodeId)
+  var visibility = node[4] || parentVisibility // 0:inherit, 1:on, 9:off
+  if (visibility === 1) {
+    var lineId = node[0] // line number
+    if (lineId) {
+      var lines = this.tree.lines
+      var line = lines.row(lineId)
+      var tp = line[0]
+      var attrs = this.tree.typeMap[tp]
+      var geom = attrs.geometry
+      if (geoms.indexOf(geom) > -1) {
+        this.addLineData(xyzc, line)
+      }
+    }
+  }
+  
+  var childId = node[3] // firstChild
+  if (childId) {
+    while (childId < this.nodeList.nR && this.nodeList.row(childId)[2] == nodeId) { // while child's parent is current node
+      this.getPlotlyData(geoms,childId,visibility, xyzc)
+      childId += 1
+    }
+  }
+  if (nodeId == 0) return xyzc
+}
+
+var x3d = {
+  circle12: [
+    [0.000000,1.000000],
+    [0.500000,0.866025],
+    [0.866025,0.500000],
+    [1.000000,0.000000],
+    [0.866025,-0.500000],
+    [0.500000,-0.866025],
+    [0.000000,-1.000000],
+    [-0.500000,-0.866025],
+    [-0.866025,-0.500000],
+    [-1.000000,-0.000000],
+    [-0.866025,0.500000],
+    [-0.500000,0.866025]
+  ],
+  circle24: [
+    [0.000000,1.000000],
+    [0.258819,0.965926],
+    [0.500000,0.866025],
+    [0.707107,0.707107],
+    [0.866025,0.500000],
+    [0.965926,0.258819],
+    [1.000000,0.000000],
+    [0.965926,-0.258819],
+    [0.866025,-0.500000],
+    [0.707107,-0.707107],
+    [0.500000,-0.866025],
+    [0.258819,-0.965926],
+    [0.000000,-1.000000],
+    [-0.258819,-0.965926],
+    [-0.500000,-0.866025],
+    [-0.707107,-0.707107],
+    [-0.866025,-0.500000],
+    [-0.965926,-0.258819],
+    [-1.000000,-0.000000],
+    [-0.965926,0.258819],
+    [-0.866025,0.500000],
+    [-0.707107,0.707107],
+    [-0.500000,0.866025],
+    [-0.258819,0.965926]
+  ],
+  originRotatedCircle: function(radius,yLevel,u,v,w,sinTheta,cosTheta) {
+    var circle = util.cloneArray(x3d.circle24)
+    for (var i=0;i<circle.length;i++) {
+      circle[i] = vec3.rotateAboutOrigin(radius*circle[i][0],yLevel,radius*circle[i][1],u,v,w,sinTheta,cosTheta)
+    }
+    return circle
+  },
+  startCircle: function(a,rA,u_ab) {
+    var xu = vec3.cross010(u_ab)
+    var sinTheta = vec3.norm(xu)
+    if (sinTheta > 1e-8) xu = vec3.scale(xu,1.0/sinTheta)
+    else xu = [1,0,0] 
+    var cosTheta = u_ab[1] // cos(theta) of u_ab with 0,1,0
+    var rc = x3d.originRotatedCircle(rA,0,xu[0],xu[1],xu[2],-sinTheta,cosTheta)
+    for (var i=0; i<rc.length; i++) {
+      rc[i] = vec3.plus(rc[i],a)
+    }
+    return rc
+  },
+  nextCircle: function(circleA,rA,u_ab,b,rB,u_bc) {
+    var u_ac = vec3.normalize(vec3.plus(u_ab,u_bc))
+    var denom = vec3.dot(u_ab,u_ac)
+    if (denom == 0) denom = 1
+    var circleB = []
+    for (var i=0; i<circleA.length; i++) {
+      var a_i = circleA[i];
+      var t = vec3.dot(vec3.diff(a_i,b),u_ac)/denom
+      var b_i = vec3.plus(a_i,vec3.scale(u_ab,t))
+      if (rB != rA && rA>0) b_i = vec3.plus(b,vec3.scale(vec3.diff(b,b_i),rB/rA))
+      circleB.push(b_i)
+    }
+    return circleB
+  }
+  /* NOT USED
+  circleIndices: function(len) {
+    var ci = []
+    var half = len/2
+    for (var i=0;i<half-1;i++) {
+      ci.push([i,i+half,(i+half+1) % (len-1),i+1].join(' '))
+    }
+    ci.push([half-1,len-1,half,0].join(' '))
+    return ci
+  }
+  */
 }
 
 /*** HBP Neuroinformatics Platform Integration code ***/
@@ -837,34 +1023,32 @@ var HBP_authenticate = function() {
 
 function HBP_retrieveFile(hbpUuid) {
   var token = HBP_authenticate();
-  
-  $.ajax('https://services.humanbrainproject.eu/document/v0/api/file/'+hbpUuid, {
+  ajaxRequest({
+    type:'GET',
+    url:'https://services.humanbrainproject.eu/document/v0/api/file/'+hbpUuid,
     headers: {
       Authorization: 'Bearer ' + token
-    }
-  })
-  .done(function(data) {
-    try {
-      data = JSON.parse(data);
-      var fileName = data['_name'];
-    } catch(err) {
-      //console.log(data)
-      var fileName = data['_name'];
-    }
-    displayResult(false,fileName);
-    $.ajax('https://services.humanbrainproject.eu/document/v0/api/file/'+hbpUuid+'/content', {
-      headers: {
-        Authorization: 'Bearer ' + token
+    },
+    success: function(xhr) {
+      var data = xhr.response
+      try {
+        data = JSON.parse(data)
+        var fileName = data['_name'];
+      } catch(err) {
+        RuntimeError(err)
+        var fileName = '???'
       }
-    })
-    .done(function(data) {
-      displayResult(data,fileName);
-    })
-    .fail(function(err) {
-      RuntimeError(JSON.stringify(err, null, 2));
-    });
+      displayResult(false,fileName);
+      ajaxRequest({
+        type:'GET',
+        url:'https://services.humanbrainproject.eu/document/v0/api/file/'+hbpUuid+'/content',
+        headers: {
+          Authorization: 'Bearer ' + token
+        },
+        success: function(xhr) {
+          displayResult(xhr.response,fileName);
+        }
+      })
+    }
   })
-  .fail(function(err) {
-    RuntimeError(JSON.stringify(err, null, 2));
-  });
 }

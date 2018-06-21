@@ -1,3 +1,6 @@
+#
+#SWCplus version="1.0">
+#  <MetaData>Test</MetaData>
 # Original file c10861.swc edited using StdSwc version 1.31 on 11/10/13.
 # Irregularities and fixes documented in c10861.swc.std.  See StdSwc1.31.doc for more information.
 #
@@ -5,6 +8,7 @@
 # Original fileName:C:\Users\praveen\Desktop\Uzma\ErrorArchives\ToBeProcessed\Amaral\asc\c10861.asc
 #The original file has a single soma contour that is averaged into 3 soma points
 # NEUROMANTIC V1.6.3 (10/18/2013 5:40:38 PM): Saved to c10861-T1.swc
+#</SWCplus>
 1 1 0.0 0.0 0.0 20.78 -1
 2 1 -3.19 -20.52 -0.45 20.78 1
 3 1 3.19 20.52 0.45 20.78 1

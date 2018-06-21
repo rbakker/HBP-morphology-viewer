@@ -1,35 +1,69 @@
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<!--
+                                                                                                                                                   /*
+This file is part of the HBP Neuron Morphology Viewer.
+
+HBP Neuron Morphology Viewer is free software: you can redistribute it and/or
+modify it under the terms of the GNU General Public License as published
+by the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+HBP Neuron Morphology Miner is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the 
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with HBP morphology viewer.  
+If not, see <http://www.gnu.org/licenses/>
+
+-->
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <meta http-equiv="X-UA-Compatible" content="chrome=1" />
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <title>HBP Neuron Morphology Viewer</title>
 <script type="text/javascript" src="./js/x3dom.js"></script>
-<link rel='stylesheet' type='text/css' href='./css/x3dom.css' />
-<!--link rel='stylesheet' type='text/css' href='./css/hbp-collaboratory-theme.css' /-->
-<!--link rel='stylesheet' type='text/css' href='./css/ez-filters-min.css' /-->
+<!--script type="text/javascript" src="./js/ubjson.js"></script-->
+<!--script type="text/javascript" src="./js/jquery-multiselect.js"></script-->
+<script type="text/javascript" src="./js/ajaxRequest.js"></script>
+<link rel='stylesheet' type='text/css' href='./css/x3dom.css'/>
+<!--link rel='stylesheet' type='text/css' href='./css/jquery-multiselect.css' /-->
+<script type="text/javascript" src="./js/morphology_parser.js"></script>
 <script type="text/javascript" src="./js/morphology_viewer.js"></script>
+<script type="text/javascript" src="./swcPlus/swcPlus_typeLibrary.js"></script>
+<script type="text/javascript" src="./js/vkbeautify.js"></script>
+<script type="text/javascript" src="./js/jquery-3.2.1.min.js"></script>
 <style>
 body{ font-family:Gotham,Arial,sans-serif;font-size:12px;line-height:1.3;color:rgb(0,0,0);background-color: #f8f8f8 }
 button,input,optgroup,select,textarea{color:inherit;font:inherit;margin:0}
 table.cmd { border-collapse: collapse }
 table.cmd th { border: 1px solid #088; text-align: left }
 table.cmd td { border: 1px solid #088 }
-ol { counter-reset: item; padding-left: 2ex }
-ol li { display: block }
-h3 { font-size:12px }
+ol.node { counter-reset: item; padding-left: 0ex; display: block }
+ol.node li { display: block }
+h3 { font-size:12px; margin:0.3em 0px; }
 pre { font-size: 10px }
 div { font-size:12px }
 div.menu { font-size:11px; } 
-div.menu, div.select { position: relative; left: 8px; right: 8px; margin-top: 8px }
-#RuntimeError { background-color: #D00; color: #FFF }
-div.toggle-open,div.toggle-closed { font-weight: bold; color: #00D; float:left; width:4ex }
-div.toggle-disabled { display: none }
+div.menu, div.selectNeuron,div.spatialRegistration { position: relative; left: 8px; right: 8px; margin-top: 8px }
+#RuntimeError { background-color: #D00; color: #FFF; padding: 2px; margin-left: 8px; margin-right: 8px; margin-bottom: 4px }
+div#RuntimeError > a:link { color: #ccf }
+div#RuntimeError > a:visited { color: #ccf }
+#metaData { display: none }
+div.selectNeuron,div.spatialRegistration { padding: 8px; margin-right: 16px; margin-bottom: 4px; background: white; border: 1px solid #000; line-height: 2 }
+.toggle:hover { color: #D00; }
+div.toggle { font-weight: bold; color: #00D; float:left; width:4ex }
+span.toggle { color: #00D }
+span.line { font-weight: normal }
+span.group { font-style: italic }
 div.content-closed { display: none }
 div.scrollbox { height:8em; border-left: 2px solid #088; padding-left: 2px; overflow-y:scroll }
-div.result { margin-left: 4px; border-left: 2px solid #0a0; padding-left:4px }
+div.result { margin-left: 0.5ex; border-left: 2px solid #0a0; padding-left:1ex }
 div.box { position: relative; padding-bottom: 50%; float: left; }
 .innerBox { position: absolute; left: 8px; right: 8px; top: 8px; bottom: 8px }
+select.search-filter { vertical-align: middle }
+#mySrs { font-weight: bold }
 
 .tooltip {
   position: relative;
@@ -68,22 +102,40 @@ div.box { position: relative; padding-bottom: 50%; float: left; }
 </style>
 
 </head>
-<body onload="handleGetRequest()">
-<div class="menu"><a href="#readme">Readme</a>&#160;|&#160;<a href="#about">About</a>&#160;|&#160;<a href="#issues">What's new</a>&#160;|&#160;<a href="#feedback">Feedback</a></div>
-<div class="select">Select morphology:&#160;<input type="file" id="morpho_file" name="morpho_file" style="display:inline"/>&#160;</div>
+<body onload="initViewer()">
+<div class="menu"><a href="#readme">Readme</a>&#160;|&#160;<a href="#terms">Terms of use</a>&#160;|&#160;<a href="#issues">What's new</a>&#160;|&#160;<a href="#feedback">Feedback</a></div>
+<div class="selectNeuron">Select neuron from <input type="radio" onchange="applyNeuronSource(this.value)" name="selectRepo" value="local"> my computer&#160;<input type="radio" onchange="applyNeuronSource(this.value)" name="selectRepo" value="NIP"> HBP Neuroinformatics Platform&#160;<input type="radio" onchange="applyNeuronSource(this.value)" name="selectRepo" value="NMO"> NeuroMorpho.org&#160;<input type="radio" onchange="applyNeuronSource(this.value)" name="selectRepo" value="ACT"> Allen Cell Types
+<div id="neuronSource"><!--Local drive: <input type="file" id="morpho_file" name="morpho_file" style="display:inline"/>&#160;--></div>
+</div>
 <div id="RuntimeError" style="display:none"></div>
 
-<div style="position: relative; left: 35%" id="X3D_CONTROLS">
-  <div class="tooltip" style="left: 8px"><input type="button" onclick="saveAsPng()" value="Export PNG"/><span class="tooltiptext">Save the current view as a bitmap image (.png)</span></div>
-  <div class="tooltip" style="left: 8px"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div>
+<div style="position: relative; left: 0%; width:100%" id="X3D_CONTROLS">
+  <div style="float:left; width: 35%">
+    <div class="tooltip" style="left: 8px; margin-right: 8px"><input type="button" onclick="saveAsPng()" value="Export PNG"/><span class="tooltiptext">Save the current view as a bitmap image (.png)</span></div>
+    <div class="tooltip"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div>
+    <div class="tooltip"><input type="button" onclick="saveAsSwc()" value="Export SWC+"/><span class="tooltiptext">Save the current view as an SWC morphology file (.swc)</span></div>
+  </div>
+  <div class="tooltip" style="left: 8px; margin-right: 8px">Soma: <input type="color" id="somaColor" onchange="displayGraphics(VIEWER)" value="#00dd00" style="width: 5ex;"><span class="tooltiptext">Set the color for the soma (cell body)</span></div>
+  <div class="tooltip">Axon: <input type="color" id="axonColor" onchange="displayGraphics(VIEWER)" value="#0000ff" style="width: 5ex;"><span class="tooltiptext">Set the color for the axonal tree</span></div>
+  <div class="tooltip">Dendrite: <input type="color" id="dendriteColor" onchange="displayGraphics(VIEWER)" value="#ff0000" style="width: 5ex;"><span class="tooltiptext">Set the color for dendritic trees</span></div>
+  <div class="tooltip">Apical dendrite: <input type="color" id="apicalColor" onchange="displayGraphics(VIEWER)" value="#990000" style="width: 5ex;"><span class="tooltiptext">Set the color for apical dendrites</span></div>
+  <div class="tooltip" style="left: 8px; margin-right: 8px">Render: <select id="renderMode" onchange="displayGraphics(VIEWER)"><option selected value="thin">thin lines (fast)</option><option value="thick">thick lines</option><option value="cones">cones (crisp)</option><option value="cones_smooth">cones (smooth)</option></select></div>
 </div>
 <div>
   <div class="box" style="width: 35%">
-    <div class="innerBox" style="overflow: scroll" id="HTML_TREE">No morphology loaded.<br/>Use the above button, or try the <a href="#" onclick="loadSampleNeuron()">sample neuron</a>.<p>Supported file formats: SWC, neurolucida-ASC, neurolucida-XML or neurolucida-DAT/NRX</p></div>
+    <div class="innerBox" style="overflow: scroll" id="HTML_TREE">No morphology loaded.
+    <br/>Supported file formats: SWC, neurolucida-ASC, neurolucida-XML or neurolucida-DAT/NRX.
+    <br/>Use the above button to select a neuron, or try one of the samples:
+      <ul>
+        <li><a href="#" onclick="loadSampleNeuron('c10861.CNG.swc')">c10861.CNG.swc</a> from the Amaral lab, downloaded from <a href="http://neuromorpho.org/neuron_info.jsp?neuron_name=c10861">neuromorpho.org</a></li>
+        <li><a href="#" onclick="loadSampleNeuron('TCneuron_EP36-S1_9-9-17.DAT')">TCneuron_EP36-S1_9-9-17.DAT</a>, thalamocortical projection neuron from the <a href="http://www.ahnfmed.uam.es/research/view-group/id/14">Francisco Clascá lab</a></li>
+      </ul>
+    </div>
   </div>
   <div class="box" style="width: 65%" id="X3D_DIV">
-    <X3D class="innerBox" style="background-color: #fff" id="X3D_ROOT" profile="Interchange" version="3.2" xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xsd:noNamespaceSchemaLocation="http://www.web3d.org/specifications/x3d-3.2.xsd">
+    <X3D class="innerBox" style="background-color: #fff" id="X3D_ROOT" profile="Interchange" version="3.3" xmlns:xsd="http://www.web3d.org/specifications/x3d-3.3.xsd">
       <Scene id="X3D_SCENE">
+        <NavigationInfo id="head" headlight='true' type='"EXAMINE"'></NavigationInfo>
         <Transform rotation="1 1 1 1">
           <Shape>
             <Appearance>
@@ -98,16 +150,38 @@ div.box { position: relative; padding-bottom: 50%; float: left; }
   <div style="visibility: hidden" id="SVG_DIV">
   </div>
 </div>
-
-<p><a name="readme"><h3>Readme</h3></a>
+<div style="display:none" id="SPATIAL_REGISTRATION">
+  <h3>Spatial registration</h3>
+  <div class="spatialRegistration">
+    <div>The neuron currently has its coordinates in the <i id="mySrs">local</i> spatial reference system. <span id="availableResources"></span>
+      <ol id="listAvailableResources"></ol>
+    </div>
+    <div id="listTransformations"></div>
+    <div id="listAtlases"></div>
+  </div>
+</div>
+<p/>
+<a name="readme"></a><h3>Readme</h3>
 After loading a file, it's raw data is visible as an expandable data tree, and its rotatable 3d shape is rendered in the X3D panel. Standard <a href="http://www.x3dom.org/documentation/interaction/">X3D controls</a> apply, notably the 'a' key resets the view to All Visible.
 You can left click on a tree segment to see its full branch name, which you can then lookup in the data tree to see the corresponding data values.
 <br/>Color scheme: blue = Axon, red = Dendrites, dark red = Apical dendrite, black = Other.
-<p><a name="about"><h3>About</h3></a>
-Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
+<p/>
+<a name="terms"></a><h3>Terms of use</h3>
+Viewer created by Rembrandt Bakker, Radboud University Nijmegen &amp; J&uuml;lich Research Institute, 2016,
 <br/>funded by the Human Brain Project Neuroinformatics Platform.
-</p><p><a name="issues"><h3>What's new</h3></a>
+<br/>If you use the morphology viewer for your research, then cite the morphology viewer publication in your publications.
+A manuscript is in preparation, the current citation is the following CNS abstract:
+<br/>Bakker R, García-Amado M, Evangelio M, Clascá F, Tiesinga P (2017) "P271 Workflow, data format and tools to register neuron morphologies to
+a reference brain atlas." <a href="https://bmcneurosci.biomedcentral.com/articles/10.1186/s12868-017-0372-1">https://bmcneurosci.biomedcentral.com/articles/10.1186/s12868-017-0372-1</a>.
+<p/>
+<a name="issues"></a><h3>What's new</h3>
 <ul>
+  <li>2017-Apr: Spines loaded from neurons in Neurolucida DAT/ASC/XML formats.</li>
+  <li>2017-Feb: Neuron can be saved in the new SVG+ format.</li>
+  <li>2016-Nov: New release with improved memory management, better hierarchical file listing, support for markers and spines.</li>
+  <li>2016-Sep: Volumetric rendering of neurites and color controls.</li>
+  <li>2016-Aug: Import neurons directly from HBP portal or NeuroMorpho.org.</li>
+  <li>2016-May: Convert radius to diameter when loading SWC files.</li>
   <li>2016-Apr: SVG and PNG export.</li>
   <li>2016-Mar: Neurolucida ASC parser no longer fails when contour names contain quotes or brackets.</li>
   <li>2016-Mar: The visibility of selected tree branches can be toggled on/off.</li>
@@ -117,7 +191,7 @@ Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
 </ul>
 <h3>Issue tracker</h3>
 <ul>
-  <li>All formats: segment diameter is not used in visualization.</li>
+  <li>All formats: segment diameter is not used in visualization (it is used in SVG export).</li>
   <li>All formats: initial zoom does not always focus properly on the neuron. Workaround: click on X3D panel, press the 'a' key.</li>
   <li>Neurolucida formats: Point markers are ignored.</li>
   <li>Neurolucida formats: Axon contour is only visible after switching contours on.</li>
@@ -130,40 +204,508 @@ Viewer created by Rembrandt Bakker, Radboud University Nijmegen, 2016,
   <li>Feature request: <div class="tooltip"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div></li>
 </ul>
 Acknowledgement for Neurolucida DAT file parsing: <a href="http://neuronland.org/NLMorphologyConverter/MorphologyFormats/NeurolucidaDAT/Spec.html">Neuronland</a>.
+Not supported yet are the <a href="http://www.genesis-sim.org/GENESIS/Hyperdoc/Manual-25.html#readcell">Genesis .p</a> and <a href="https://en.wikipedia.org/wiki/Amira_(software)">AmiraMesh</a> formats.
 <br/>We've identified two other WebGL-based morphology viewers:
 <ul>
 <li><a href="http://janeliascicomp.github.io/SharkViewer/">Shark Viewer</a>, view on <a href="https://github.com/JaneliaSciComp/SharkViewer">github</a></li>
 <li><a href="https://servicehub.mpdl.mpg.de/swc">MPDL SWC-service</a> (based on Shark Viewer), view on <a href="https://github.com/MPDL/swc-service/blob/master/README.md#usage">github</a></li>
 </ul>
-</p>
-<p><a name="feedback"><h3>Feedback</h3></a>
+<p/>
+<a name="feedback"></a><h3>Feedback</h3>
 If you have a particular neuron that doesn't load well, please <a href="mailto:hbp@scalablebrainatlas.org">send us</a> (a link to) it.
 <br/>If the tool does not work on a particular browser/operating system, but that combination does support x3dom <a href="http://www.x3dom.org/contact/?page_id=9">(check)</a>, then see if you have any <a href="http://webmasters.stackexchange.com/questions/8525/how-to-open-the-javascript-console-in-different-browsers">javascript errors</a> and <a href="mailto:hbp@scalablebrainatlas.org">send us</a> the error.
-</p>
+<p/>
+<a name="playground"></a><h3>Playground</h3>
+This section is to test experimental scripts. Clicking the buttons may result in an unstable state of the viewer.
+<br/><!--p><input type="button" onclick="showAtlasSlice('y',-1.82)" value="Show atlas slice"><div id="show"></div></p-->
+<div class="tooltip"><input type="button" onclick="usePlotly()" value="Atlas Registration"/><span class="tooltiptext">Register the current neuron to a brain atlas (opens new tab)</span></div>
+<div class="tooltip"><input type="button" onclick="saveAsNml()" value="Export NML"/><span class="tooltiptext">Save the current view as an NeuroML 2 file (.nml)</span></div>
+<div class="tooltip"><input type="button" onclick="saveAsX3d()" value="Export X3D"/><span class="tooltiptext">Save the current view as an X3D model (.x3d)</span></div>
+<div class="tooltip"><input type="button" onclick="fitAffine()" value="Fit Affine"/><span class="tooltiptext">Fit affine transformation based on anchor points</span></div>
+<div class="tooltip"><input type="button" onclick="displayMesh()" value="Display semi-transparant mesh"/><span class="tooltiptext">Display semi-transparant mesh in ABA-CCF3-voxel space</span></div>
 
 <script>
-var TREE
 var SCRIPTS = {}
-
-//<![CDATA[
-function handleLineClick(elem) {
-  alert(elem.id);
+var NMO_LEGEND = null
+var NMO_FILTERS = {
+  'speciesName':'Species',
+  'strain':'Strain',
+  'brainRegion1':'Brain region',
+  'brainRegion2':'Brain subregion',
+  'cellClass1':'Cell class',
+  'cellClass2':'Cell subclass',
+  'structuralDomains':'Reconstructed parts',
+  'physicalIntegrity':'Completeness'
+}
+var NIP_FILTERS = {
+  "specimen.species.term.raw_term":"Species",
+  //"methods":"methods.term.raw_term",
+  //"protocols":"protocols.title.raw_term",
+  "classifications.term.raw_term":"Cell type",
+  //"contributors":"contributors.last_name.raw_term",
+  //"affiliations":"contributors.affiliations.raw_affiliations",
+  "brain_regions.term.raw_term":"Brain region"
+}
+var NIP_LC2FILTER = {
+  "species":"specimen.species.term.raw_term",
+  //"methods":"methods.term.raw_term",
+  //"protocols":"protocols.title.raw_term",
+  "cell types":"classifications.term.raw_term",
+  //"contributors":"contributors.last_name.raw_term",
+  //"affiliations":"contributors.affiliations.raw_affiliations",
+  "brain regions":"brain_regions.term.raw_term"
+}
+var NIP_STORAGE_TYPES = ['zenodo','hbp document service']
+var NIP_METADATA = []
+var ACT_LEGEND = null
+var ACT_FILTERS = {
+  'speciesName':'Species',
+  'creLine':'CRE line',
+  'parentStructureAcr':'Brain region',
+  'structureAcr':'Brain subregion',
+  'dendriteType':'Dendrite type',
+  'age':'Age',
+  'gender':'Gender'
 }
 
+//<![CDATA[
 function addScript(name,src,callback) {
   var elem = document.createElement('script')
   elem.setAttribute('type','text/javascript')
   elem.setAttribute('src',src)
-  SCRIPTS[name] = true;
+  SCRIPTS[name] = true
   elem.onreadystatechange = elem.onload = callback
   document.getElementsByTagName('head')[0].appendChild(elem);
 }
 
-function saveAsPng() {
-  if (TREE == undefined) {
-    RuntimeError('You must first load a neuron into the viewer.');
-    return;
+function validateRPC(data) {
+  try {
+    data = JSON.parse(data)
+    if (data.error) return console.log('RPC error: '+JSON.stringify(data.error,null,2))
+    if (data.debug) console.log('RPC debug: '+JSON.stringify(data.debug,null,2))
+    return data.result
+  } catch(e) {
+    console.log('JSON error: '+data)
   }
+}
+
+function fail(xhr) {
+  var url48 = xhr.requestUrl.length>48 ? xhr.requestUrl.substr(0,44)+' ...' : xhr.requestUrl
+  RuntimeError('Data request to <a href="'+xhr.requestUrl+'">url('+url48+')</a> failed with status code '+xhr.statusCode+'.')
+}
+
+function displayXhrResponse(xhr,fileName) {
+  var response = xhr.response
+  if (fileName.match(/\.asc|\.xml|\.swc/i)) {
+    // read text from byte-array
+    if (typeof TextDecoder !== 'undefined') {
+      var dataView = new DataView(response)
+      var decoder = new TextDecoder('utf-8')
+      response = decoder.decode(dataView)
+    } else {
+      response =  String.fromCharCode.apply(null, new Uint8Array(response,0,response.byteLength));
+    }
+  }
+  displayResult(response,fileName)
+}
+
+function loadNmoNeuron() {
+  var elem1 = document.getElementById('NMO_select')
+  var elem2 = document.getElementById('NMO_raw')
+  var metaHtml = [
+    'Meta data at <a target="_blank" href="http://neuromorpho.org/neuron_info.jsp?neuron_name='+elem1.options[elem1.selectedIndex].value+'">NeuroMorpho.org</a>.',
+    'Terms of use: <a target="_blank" href="http://neuromorpho.org/useterm.jsp">NeuroMorpho.org citation policy</a>.'
+  ]
+  ajaxRequest({
+    type:"GET",
+    url:"neuromorpho_proxy.php",
+    data:{
+      neuron:elem1.options[elem1.selectedIndex].value,
+      raw:elem2.options[elem2.selectedIndex].value
+    },
+    responseType:'arraybuffer',
+    success: function(xhr){
+      var hdr = xhr.getResponseHeader('Content-Type')
+      if (hdr.match(/text\/html/)) {
+        RuntimeError('Unexpected html-type response from <a href="'+xhr.requestUrl+'">neuromorpho_proxy.php</a>')
+        return
+      }
+      hdr = xhr.getResponseHeader('Content-Disposition')
+      var M = hdr.match(/inline; filename=([^\s]+)/i)
+      fileName = M[1]
+      displayXhrResponse(xhr,fileName)
+    },
+    fail:fail
+  })
+  var elem = document.getElementById('metaData')
+  elem.style.display = 'block'
+  elem.innerHTML = '<ul><li>'+metaHtml.join('</li><li>')+'</li></ul>'
+}
+  
+function loadActNeuron() {
+  var elem = document.getElementById('ACT_select')
+  var nrwkfId = elem.options[elem.selectedIndex].value
+  var metaHtml = [
+    'Meta data at <a target="_blank" href="http://api.brain-map.org/api/v2/data/ApiCellTypesSpecimenDetail/query.xml?criteria=[nrwkf_id$eq'+nrwkfId+']&include=specimen(neuron_reconstructions(well_known_files),donor(age,organism))">api.brain-map.org (XML)</a>.',
+    'Terms of use: <a target="_blank" href="http://www.alleninstitute.org/legal/citation-policy/">Allen Institute citation policy</a>.'
+  ]
+  ajaxRequest({
+    type:"GET",
+    url:"allen_proxy.php",
+    data:{
+      neuron:nrwkfId
+    },
+    responseType:'arraybuffer',
+    success: function(xhr){
+      var hdr = xhr.getResponseHeader('Content-Type')
+      if (hdr.match(/text\/html/)) {
+        RuntimeError('Unexpected html-type response from <a href="'+xhr.requestUrl+'">allen_proxy.php</a>')
+        return
+      }
+      hdr = xhr.getResponseHeader('Content-Disposition')
+      var M = hdr.match(/inline; filename=([^\s]+)/i)
+      fileName = M[1]
+      displayXhrResponse(xhr,fileName)
+    },
+    fail:fail
+  })
+  var elem = document.getElementById('metaData')
+  elem.style.display = 'block';
+  elem.innerHTML = '<ul><li>'+metaHtml.join('</li><li>')+'</li></ul>'
+}
+  
+function loadNipNeuron() {
+  var elem = document.getElementById('nip_select')
+  var access = elem.options[elem.selectedIndex].value
+  var hit = NIP_METADATA[access]
+  var storageType = hit.source.representations[0].storagetype.term.toLowerCase()
+  var metaHtml = [
+    'Meta data in <a target="_blank" href="data:text/plain,'+encodeURIComponent(JSON.stringify(hit,null,2))+'">raw json format</a>.',
+    'License: '+((h=hit.source)&&(h=h.license)&&(h=h.term) ? h : '[missing]')
+  ]
+  if (storageType == 'hbp document service') {
+    var scripts = ["./js/bbp-oidc-client.js"]
+    for (var i=0; i<scripts.length; i++) {
+      var elem = document.createElement('script')
+      elem.setAttribute('type','text/javascript')
+      elem.setAttribute('src',scripts[i])
+      elem.onreadystatechange = elem.onload = function() {
+        scripts.pop()
+        if (scripts.length == 0) {
+          HBP_retrieveFile(access)
+        }
+      }
+      document.getElementsByTagName('head')[0].appendChild(elem)
+    }
+  } else if (storageType == 'zenodo') {
+    ajaxRequest({
+      type:"GET",
+      url:"zenodo_proxy.php",
+      data:{
+        file:access.substr(25)
+      },
+      responseType:'arraybuffer',
+      success: function(xhr){
+        var hdr = xhr.getResponseHeader('Content-Type')
+        if (hdr.match(/text\/html/)) {
+          RuntimeError('Unexpected text/html response from zenodo_proxy.php')
+          return
+        }
+        hdr = xhr.getResponseHeader('Content-Disposition')
+        var M = hdr.match(/inline; filename=([^\s]+)/i)
+        fileName = M[1]
+        displayXhrResponse(xhr,fileName)
+      },
+      fail:fail
+    })
+  } else {
+    RuntimeError('Unsupported storage type '+storageType);    
+  }
+  var elem = document.getElementById('metaData')
+  elem.style.display = 'block';
+  elem.innerHTML = '<ul><li>'+metaHtml.join('</li><li>')+'</li></ul>'
+}
+
+function applySearchFilters(repository) {
+  var elems = document.getElementsByClassName('search-filter')
+  // backup currently selected items
+  var filters = {}
+  for (var i=0;i<elems.length;i++) {
+    var elem = elems[i]
+    var options = elem.options
+    var s = []
+    for (var j=0;j<options.length;j++) {
+      if (options[j].selected && options[j].value) s.push(options[j].value)
+    }
+    var term = elem.id.substr(11)
+    filters[term] = s;
+  }
+  updateNeuronSource(repository,filters,true)
+}
+
+function applyNeuronSource(repository,filters,version) {
+  var elems = document.getElementsByName('selectRepo');
+  for (var i=0;i<elems.length;i++) {
+    if (elems[i].value == repository) { elems[i].checked = true; break }
+  }
+  
+  var html = ''
+  if (repository == 'local') {
+    html = 'Local drive: <input type="file" id="morpho_file" onchange="handleFileSelect(event)" name="morpho_file" style="display:inline"/>&#160;'
+  } else if (repository == 'NMO') {
+    if (!filters) filters = {}
+    for (var k in NMO_FILTERS) filters[k]||(filters[k]=[])
+
+    if (!NMO_LEGEND) {
+      ajaxRequest({
+        type:"GET",
+        url:"neuromorpho_cache.php",
+        data:{
+          "output":"legend",
+          "filters":JSON.stringify(filters)
+        },
+        success: function(xhr) {
+          var data = validateRPC(xhr.responseText)
+          NMO_LEGEND = JSON.parse(xhr.response).result
+          ajaxRequest({
+            type:"GET",
+            url:"neuromorpho_cache.php",
+            data:{
+              "output":"version",
+            },
+            success: function(xhr) {
+              var version = validateRPC(xhr.responseText)
+              applyNeuronSource(repository,filters,version)
+            },
+            fail: function(xhr) {
+              applyNeuronSource(repository,filters)
+              console.log("NMO: Failed to load version information.")
+            }
+          })
+        },
+        fail: function(xhr) {
+          NMO_LEGEND = { "error":"[failed to load]" }
+          fail(xhr)
+        }
+      })
+      return
+    }
+    if (version) html += '<div>Version '+version.version+', synchronized on '+version.modified+'</div>'
+    for (var k in filters) {
+      html += '<div>'+NMO_FILTERS[k]+':&nbsp;<select class="search-filter" id="NMO_filter:'+k+'"></select></div>'
+    }
+    html += 'Load neuron: <select id="NMO_select" onchange="loadNmoNeuron()"></select>'
+    html += ' Preprocessing: <select id="NMO_raw" onchange="loadNmoNeuron()"><option value="1">Raw</option><option value="0" selected>Cleaned &amp; normalized</option></select> <span id="search_hits"></span><div id="metaData"></div>'
+  } else if (repository == 'NIP') {
+    var forcedFilters = {
+      "data_modalities.term.raw_term":["Single cell morphology reconstruction"]
+    }
+    if (!filters) filters=forcedFilters; else for (var k in forcedFilters) filters[k] = forcedFilters[k]
+    for (var k in NIP_FILTERS) {
+      html += '<div>'+NIP_FILTERS[k]+':&nbsp;<select class="search-filter" id="nip_filter:'+k+'"></select></div>'
+    }
+    html += 'Load neuron: <select id="nip_select" onchange="loadNipNeuron()"></select> <span id="search_hits"></span><div id="metaData"></div>'
+  } else if (repository == 'ACT') {
+    if (!filters) filters = {}
+    for (var k in ACT_FILTERS) filters[k]||(filters[k]=[])
+
+    if (!ACT_LEGEND) {
+      ajaxRequest({
+        type:"GET",
+        url:"allen_cache.php",
+        data:{
+          "output":"legend",
+          "filters":JSON.stringify(filters)
+        },
+        success: function(xhr) {
+          var data = validateRPC(xhr.responseText)
+          ACT_LEGEND = JSON.parse(xhr.response).result
+          applyNeuronSource(repository,filters)
+        },
+        fail: function(xhr) {
+          ACT_LEGEND = { "error":"[failed to load]" }
+          fail(xhr)
+        }
+      })
+      return
+    }
+    for (var k in filters) {
+      html += '<div>'+ACT_FILTERS[k]+':&nbsp;<select class="search-filter" id="ACT_filter:'+k+'"></select></div>'
+    }
+    html += 'Load neuron: <select id="ACT_select" onchange="loadActNeuron()"></select>'
+    html += ' <span id="search_hits"></span><div id="metaData"></div>'
+  } else {
+    RuntimeError('Unsupported repository "'+repository+'".')
+  }
+  document.getElementById('neuronSource').innerHTML = html
+  updateNeuronSource(repository,filters)
+}
+
+function updateNeuronSource(repository,filters) {
+  if (repository == 'local') {
+  } else if (repository == 'NMO' || repository == 'ACT') {
+    var MY_FILTERS = (repository=='NMO' ? NMO_FILTERS : ACT_FILTERS)
+    var MY_URL = (repository=='NMO' ? 'neuromorpho_cache.php' : 'allen_cache.php')
+    var MY_LOAD = (repository=='NMO' ? loadNmoNeuron : loadActNeuron)
+    var MY_LEGEND = (repository=='NMO' ? NMO_LEGEND : ACT_LEGEND)
+    var MY_NEURONNAME = (repository=='NMO' ? 'neuronName' : 'fileName')
+    var MY_NEURONID = (repository=='NMO' ? undefined : 'nrwkfId')
+    if (!filters) filters = {}
+    for (var k in MY_FILTERS) filters[k]||(filters[k]=[])
+    ajaxRequest({
+      type:"GET",
+      url:MY_URL,
+      data:{
+        "output":"hits",
+        "filters":JSON.stringify(filters),
+        "limit":100
+      },
+      success: function(xhr){
+        var data = validateRPC(xhr.responseText)
+        var select = document.getElementById(repository+'_select')
+        select.onchange = null
+        select.options.length = 0 // empty
+        var opt = document.createElement("option");
+        opt.text = '... select one ...'
+        opt.selected = true
+        opt.disabled = true
+        select.add(opt);
+        for (var i in data) {
+          var opt = document.createElement("option");
+          opt.text = data[i][MY_NEURONNAME];
+          if (MY_NEURONID) opt.value = data[i][MY_NEURONID];
+          select.add(opt);
+        }
+        select.onchange = MY_LOAD
+      },
+      fail:fail
+    })
+    // update filter values
+    ajaxRequest({
+      type:"GET",
+      url:MY_URL,
+      data:{
+        "output":"count",
+        "filters":JSON.stringify(filters)
+      },
+      success: function(xhr){
+        var onchange = function() { applySearchFilters(repository) }
+        var data = validateRPC(xhr.responseText)
+        for (var k in data) if (k!='COUNT(*)') {
+          var select = document.getElementById(repository+'_filter:'+k)
+          select.onchange = null
+          select.options.length = 0 // empty
+          var opt = document.createElement("option");
+          opt.text = '[any]';
+          opt.value = "";
+          select.add(opt);
+          var v = data[k];
+          for (var i in v) {
+            var opt = document.createElement("option");
+            opt.text = (MY_LEGEND[k] ? MY_LEGEND[k][i] : 'id='+i)+' ('+v[i]+')';
+            opt.value = i;
+            if (filters[k] && filters[k].indexOf(i) != -1) opt.selected = true;
+            select.add(opt);
+          }
+          select.onchange = onchange;
+        } else {
+          var total = data[k];
+          document.getElementById('search_hits').innerHTML = '('+Math.min(total,100)+' out of '+total+' hits)';
+        }
+      },
+      fail:fail
+    })
+  } else if (repository == 'NIP') {
+    var forcedFilters = {
+      "data_modalities.term.raw_term":["Single cell morphology reconstruction"]
+    }
+    if (!filters) filters=forcedFilters; else for (var k in forcedFilters) filters[k] = forcedFilters[k]
+    ajaxRequest({
+      type:"GET",
+      url:'https://nip.humanbrainproject.eu/api/ksearch/search',
+      data: {
+        'q':'morphology',
+        'filters':JSON.stringify(filters),
+        aggreg:true,
+        size:20
+      },
+      success: function(xhr){
+        var data = JSON.parse(xhr.responseText)
+        aggreg = data['aggregations']
+        var onchange = function() { applySearchFilters('NIP') }
+        for (var i=0;i<aggreg.length;i++) {
+          var a = aggreg[i]
+          if (a.total>0) {
+            var k = NIP_LC2FILTER[a.name.toLowerCase()]
+            if (k) {
+              /* insert options */
+              var select = document.getElementById('nip_filter:'+k)
+              select.onchange = null
+              select.options.length = 0 // empty
+              var opt = document.createElement("option");
+              opt.text = '[any]'
+              opt.value = ""
+              select.options.add(opt);
+              for (var j=0;j<a.buckets.length;j++) {
+                var b = a['buckets'][j]
+                var opt = document.createElement("option")
+                opt.text = b.key+' ('+b['doc_count']+')'
+                opt.value = b.key
+                if (filters[k] && filters[k].indexOf(b.key) != -1) opt.selected = true
+                select.options.add(opt)
+              }
+              select.onchange = onchange
+            } else {
+              console.log('No filter term found for filter name "'+a.name+'"')
+            }
+          }
+        }
+        
+        NIP_METADATA = {}
+        var select = document.getElementById('nip_select')
+        select.onchange = null
+        select.options.length = 0 // empty
+        hits = data['hits']
+        var opt = document.createElement("option");
+        opt.text = '... select one ...'
+        opt.selected = true
+        opt.disabled = true
+        select.add(opt)
+        for (var i in hits) {
+          var h = hits[i]
+          var storageType = h.source.representations[0] && h.source.representations[0].storagetype
+          if (storageType) {
+            var term = storageType.term
+            var opt = document.createElement("option")
+            opt.text = h.source.representations[0].access
+            var s = NIP_STORAGE_TYPES.indexOf(term.toLowerCase())
+            if (s==-1) opt.disabled = true
+            select.add(opt);
+            var access = h.source.representations[0].access
+            select.text = access
+            NIP_METADATA[access] = h
+          } else {
+            RuntimeError('No storage type found for hit '+i+'.') 
+          }
+        }
+        select.onchange = loadNipNeuron
+        document.getElementById('search_hits').innerHTML = '('+Math.min(data.total,100)+' out of '+data.total+' hits)'
+      },
+      fail:fail
+    })
+  } else {
+    RuntimeError('Unsupported repository "'+repository+'".')
+  }
+}
+
+function assertTreeLoaded() {
+  if (VIEWER == undefined || VIEWER.tree == undefined) {
+    RuntimeError('You must first load a neuron into the viewer.',true)
+  }
+}
+
+function saveAsPng() {
+  assertTreeLoaded()
   if (SCRIPTS['FileSaver'] && SCRIPTS['ToBlob']) {
     elem = document.getElementById('X3D_ROOT')
     var canvas = elem.runtime.getCanvas()
@@ -177,10 +719,7 @@ function saveAsPng() {
 }
 
 function saveAsSvg() {
-  if (TREE == undefined) {
-    RuntimeError('You must first load a neuron into the viewer.');
-    return;
-  }
+  assertTreeLoaded()
   if (SCRIPTS['FileSaver']) {
     var elem = document.getElementById('SVG_ROOT')
     if (!elem) {
@@ -194,110 +733,566 @@ function saveAsSvg() {
       document.getElementById('SVG_DIV').appendChild(elem)
     }
     var x3d = document.getElementById('X3D_ROOT')
-    M = x3d.runtime.viewMatrix()
-    var svg = '<g transform="scale(1,-1)">'+treeToShapes(TREE,undefined,false,[[M._00,M._01,M._02],[M._10,M._11,M._12]])+'</g>'
+    M = x3d.runtime.viewMatrix()    
+    var svg = '<g transform="scale(1,-1)">'+VIEWER.renderSvg([[M._00,M._01,M._02],[M._10,M._11,M._12]])+'</g>'
     elem.innerHTML = svg
     var bb = elem.getBBox()
     elem.setAttribute("viewBox",[bb.x,bb.y,bb.width,bb.height].join(' '))
-    var blob = new Blob([elem.outerHTML], {type:'image/svg+xml'})
+    elem.setAttribute("width",''+bb.width+'mm') // so, 1 pixel corresponds to 1 mm (in reality, 1 micro-meter)
+    elem.setAttribute("height",''+bb.height+'mm') // so, 1 pixel corresponds to 1 mm (in reality, 1 micro-meter)
+    var blob = new Blob([document.getElementById('SVG_DIV').innerHTML], {type:'image/svg+xml'})
     saveAs(blob,'morphology.svg')
   } else {
     addScript('FileSaver','./js/FileSaver.min.js',saveAsSvg)
   }
 }
 
+function saveAsX3d() {
+  assertTreeLoaded()
+  if (SCRIPTS['FileSaver']) {
+    let preamble = '<?xml version="1.0" encoding="UTF-8"?>\n<!DOCTYPE X3D PUBLIC "ISO//Web3D//DTD X3D 3.3//EN"\n  "http://www.web3d.org/specifications/x3d-3.3.dtd">\n';
+    let x3dStart = '<X3D profile="Interactive" version="3.3"\n  xmlns:xsd="http://www.w3.org/2001/XMLSchema-instance" xsd:noNamespaceSchemaLocation="http://www.web3d.org/specifications/x3d-3.3.xsd">\n  <Scene>\n';
+    let x3dEnd = '</Scene>\n</X3D>';
+    VIEWER.interactiveMode = false;
+    let x3d = VIEWER.renderTree();
+    VIEWER.interactiveMode = true;
+    var blob = new Blob([preamble+x3dStart+x3d+x3dEnd], {type:'image/model+x3d'})
+    saveAs(blob,'morphology.x3d')
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsX3d)
+  }
+}
+
+function saveAsSwc() {
+  assertTreeLoaded()
+  if (SCRIPTS['FileSaver']) {
+    const swc = VIEWER.tree.toSWC()
+    const blob = new Blob([swc], {type:'text/swc'})
+    saveAs(blob,'morphology.swc')
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsSwc)
+  }
+}
+
+function saveAsNml() {
+  assertTreeLoaded()
+  if (SCRIPTS['FileSaver']) {
+    const nml = VIEWER.tree.toNeuroML2()
+    const blob = new Blob([nml], {type:'text/xml'})
+    saveAs(blob,'morphology.nml')
+  } else {
+    addScript('FileSaver','./js/FileSaver.min.js',saveAsNml)
+  }
+}
+
+function setColor(elem) {
+  alert('Under construction '+elem.id)
+}
+
+function displayText(viewer) {
+  var treeDiv = document.getElementById('HTML_TREE');
+  if (typeof viewer == 'string') {
+    treeDiv.innerHTML = 'Error in file "'+fileName+'".<pre>'+util.escapeHtml(tree)+'</pre>'
+  } else {
+    treeDiv.innerHTML = viewer.listingHtml('h2')
+  }
+}
+
+function resetViewpoint(viewer) {
+  var limits = viewer.tree.getLimits();
+  if (limits) {
+    var mn = limits[0]
+    var mx = limits[1]
+    var mid = [0.5*(mn[0]+mx[0]), 0.5*(mn[1]+mx[1]), 0.5*(mn[2]+mx[2])]
+    var x3d_height = 1000
+    var x3d_width = 1000
+    var distanceW = 2*(mx[0]-mn[0])*x3d_height/x3d_width
+    var distanceH = 2*(mx[1]-mn[1])*x3d_width/x3d_height
+    var distance = Math.max(distanceW,distanceH)
+    var position = [mid[0],mid[1],mid[2]+distance]
+    
+    // replace existing x3dElem by the new domElem
+    var scene = document.getElementById('X3D_SCENE')
+    scene.innerHTML = viewer.renderTree()
+    var vpElem = document.createElement('viewpoint')
+    vpElem.setAttribute("orientation","0 0 1 0")
+    vpElem.setAttribute("fieldOfView","0.5236")
+    vpElem.setAttribute("position",position.join(' '))
+    vpElem.setAttribute("centerOfRotation",mid.join(' '))
+    scene.appendChild(vpElem)
+  }
+}
+
+function displayGraphics(viewer) {
+  var renderSelect = document.getElementById('renderMode')
+  viewer.x3dSettings = {
+    somaColor: document.getElementById('somaColor').value,
+    axonColor: document.getElementById('axonColor').value,
+    dendriteColor: document.getElementById('dendriteColor').value,
+    apicalColor: document.getElementById('apicalColor').value,
+    spineColor: null,
+    renderMode: renderSelect.options[renderSelect.selectedIndex].value
+  }
+  resetViewpoint(viewer);
+/*  var limits = viewer.tree.getLimits();
+  if (limits) {
+    var mn = limits[0]
+    var mx = limits[1]
+    var mid = [0.5*(mn[0]+mx[0]), 0.5*(mn[1]+mx[1]), 0.5*(mn[2]+mx[2])]
+    var x3d_height = 1000
+    var x3d_width = 1000
+    var distanceW = 2*(mx[0]-mn[0])*x3d_height/x3d_width
+    var distanceH = 2*(mx[1]-mn[1])*x3d_width/x3d_height
+    var distance = Math.max(distanceW,distanceH)
+    var position = [mid[0],mid[1],mid[2]+distance]
+    
+    // replace existing x3dElem by the new domElem
+    var scene = document.getElementById('X3D_SCENE')
+    //var x3d = new DOMParser().parseFromString( viewer.renderTree(),'application/xml' )
+    //scene.appendChild( 
+    //  scene.ownerDocument.importNode(x3d.documentElement, true)
+    //)
+    scene.innerHTML = viewer.renderTree()
+    var vpElem = document.createElementNS('http://www.w3.org/1999/xhtml','viewpoint')
+    var vpElem = document.createElement('viewpoint')
+    vpElem.setAttribute("orientation","0 0 1 0")
+    vpElem.setAttribute("fieldOfView","0.5236")
+    vpElem.setAttribute("position",position.join(' '))
+    vpElem.setAttribute("centerOfRotation",mid.join(' '))
+    scene.appendChild(vpElem)
+  }
+*/
+}
+
+/*function loadTransform(source,onSuccess,onError) {
+  $.get({
+    url: source,
+    dataType:'xml',
+    responseType:'document'
+  })
+  .success(function(xml) {
+    var jml = xmlLib.toDict( xml.getElementsByTagName("transform") )
+    VIEWER.transforms[source] = jml
+    onSuccess && onSuccess()
+  })
+  .error(function(err) {
+    if (err.statusText == 'OK') displayResult(err.responseText,fileName) // data returned as error when using file:/
+    RuntimeError(JSON.stringify(err, null, 2))
+    onError && onError()
+  })
+}
+*/
+
+function loadAtlas(url,onDone,onFail) {
+  if (VIEWER.spatialRegistration.atlases[url]) return true // already loaded 
+  if (VIEWER.spatialRegistration.atlases[url] === undefined) {
+    VIEWER.spatialRegistration.atlases[url] = false // means loading...
+    var dataType = ( url.substr(-4,4) == '.xml' ? '.xml' : 'jsonp')     
+    $.get({
+      url: url,
+      dataType: dataType,
+      responseType: 'document',
+      cache: true,
+      jsonpCallback: 'callback'
+    })
+    .done(function(jml) {
+      if (dataType == 'xml') {
+        jml = xmlLib.toDict( jml.getElementsByTagName("atlas") )
+      } else {
+        jml = jml.atlas
+      }
+      VIEWER.spatialRegistration.atlases[url] = (jml ? jml : false)
+      onDone && onDone()
+    })
+    .fail(function(err) {
+      RuntimeError(JSON.stringify(err, null, 2))
+      onFail && onFail()
+    })
+  }
+  return false
+}
+
+function loadAtlasesAndTransforms(onDone,onFail) {
+  var swcAttrs = VIEWER.tree.swcAttrs
+  let importElem = VIEWER.tree.metaData['import']
+  if (importElem) {
+    const atlases = {}
+    const transforms = {}
+    let atlasElems = assertArray(importElem.atlas)
+    for (var i=0; i<atlasElems.length; i++) {
+      const name = atlasElems[i].name
+      if (name) atlases[name] = atlasElems[i].url
+    }  
+    let transformElems = assertArray(importElem.transform)
+    for (var i=0; i<transformElems.length; i++) {
+      const name = transformElems[i].name
+      if (name) transforms[name] = transformElems[i].url
+    }  
+    var ready = true
+    for (let k in atlases) {
+      let url = atlases[k]+'/index.jsonp'
+      ready &= loadAtlas(url,onDone,onFail)
+    }
+    for (let k in transforms) {
+      VIEWER.spatialRegistration.transforms[k] = true
+    }
+  }
+  return ready
+}
+
+function availableResourcesBySrs(srs) {
+  var atlases = VIEWER.spatialRegistration.atlases
+console.log(atlases)
+  var modalitiesBySrs = {}
+  var transformationsToSrs = {}
+  for (var k in atlases) {
+    var atlas = atlases[k]
+    var dataModalities = atlas.dataModalities
+    for (var m in dataModalities) {
+      var dm = assertArray(dataModalities[m])
+      for (var i=0; i<dm.length; i++) {
+        var srsAvail = dm[i].srs
+        dm[i].__key__ = m
+        dm[i].__atlasId__ = atlas.id
+        dm[i].__atlasName__ = atlas.name
+        dm[i].__atlasUrl__ = k
+        modalitiesBySrs[srsAvail] = assertArray(modalitiesBySrs[srsAvail])
+        modalitiesBySrs[srsAvail].push(dm[i])
+      }      
+    }
+    var spatialRegistration = atlas.spatialRegistration
+    var transformations = assertArray(spatialRegistration && spatialRegistration.transformation)
+    for (var i=0; i<transformations.length; i++) {
+      var toSrs = transformations[i].toSrs
+      transformationsToSrs[toSrs] = assertArray(transformationsToSrs[toSrs])
+      transformationsToSrs[toSrs].push(transformations[i])
+    }
+  }
+console.log(modalitiesBySrs)
+  availableResources = []
+  var avail = assertArray(modalitiesBySrs[srs])
+  for (var j=0; j<avail.length; j++) {
+    availableResources.push({'data':avail[j],'transformations':[]})
+  }
+  var tfs = assertArray(transformationsToSrs[srs])
+  for (var i=0; i<tfs.length; i++) {
+    var fromSrs = tfs[i].fromSrs
+    var avail = modalitiesBySrs[fromSrs]
+    for (var j=0; j<avail.length; j++) {
+      availableResources.push({'data':avail[j],'transformations':[tfs[i]]})
+    }
+  }
+  return availableResources
+}
+
+FIRSTTIME = 1
+
+function selectImageFromStack(elem,i,aOrB) {
+if (FIRSTTIME) {
+  resetViewpoint(VIEWER)
+}
+FIRSTTIME = 0
+
+  var choice = parseInt($(elem).val())
+  if (choice !== undefined) {
+    var resource = VIEWER.spatialRegistration.availableResources[i]
+    sliceXML = VIEWER.renderImage(resource.data,choice,resource.transformations)
+    //var scene = document.getElementById('X3D_SCENE')
+    //var groupElem = document.createElement('group')
+    //groupElem.innerHTML = atlasXML
+    //scene.appendChild(groupElem)
+    console.log('Now showing atlas slice')
+    var groupId = 'SelectImage'+aOrB
+    var groupElem = document.getElementById(groupId)
+    var scene = document.getElementById('X3D_SCENE')
+    // remove existing slice
+    if (groupElem) scene.removeChild(groupElem)
+    // create new slice
+    var groupElem = document.createElement('group')
+    groupElem.id = groupId
+    groupElem.innerHTML = sliceXML
+    scene.appendChild(groupElem)
+  }
+}
+
+function dataSelectHtml(i,resource) {
+  var data = resource.data
+  var format = data.__key__
+  var atlasId = data.__atlasId__
+  var atlasName = data.__atlasName__
+  var txt = []
+  var modality = (data.modality || 'unknown')
+  if (format == 'imageStack') {
+    var options = ['<option value="">-</option>']
+    var slices = assertArray(data.image)
+    for (var s=0; s<slices.length; s++) {
+      var name = slices[s].name || slices[s].coord || slices[s].id
+      options.push('<option value="'+s+'">'+name+'</option>')
+    }
+    options = options.join('')
+    txt.push(atlasName+'&nbsp;-&nbsp;'+modality+'. Select two images: <select onchange="selectImageFromStack(this,'+i+',0)">'+options+'</select> and <select onchange="selectImageFromStack(this,'+i+',1)">'+options+'</select>')
+  } else {
+    txt.push('Unsupported format "'+format+' for data modality "'+modality+'"')
+  }
+  return txt.join('')
+}
+
+function setSrs(srs) {
+  $('#mySrs').html(srs)
+console.log(  availableResourcesBySrs(srs)  )
+  var availableResources = availableResourcesBySrs(srs)
+  VIEWER.spatialRegistration.availableResources = availableResources
+  var txt = []
+  if (availableResources.length) {
+    txt.push('In this space, there '+(availableResources.length == 1 ? 'is ' : 'are ')+availableResources.length+' data modalit'+(availableResources.length == 1 ? 'y' : 'ies')+' available for display:')
+    var list = []
+    for (var i=0; i<availableResources.length; i++) {
+      var avail = availableResources[i]
+      list.push('<li>'+dataSelectHtml(i,availableResources[i])+'</li>')
+    }
+    list.push('</ol>')
+    $('#listAvailableResources').html(list.join(''))
+  } else {
+    txt.push('In this space, there are no external data resources available.')
+  }
+  $('#availableResources').html(txt.join(''))
+}
+
+function applyTransformation(transform,toSrs) {
+  ok = VIEWER.tree.applyTransformation(transform,toSrs)
+  if (ok) setSrs(toSrs)
+}
+
+function listTransformations() {
+  
+  var metaData = VIEWER.tree.metaData
+  var spatialRegistration = metaData.spatialRegistration
+  var mySrs = (spatialRegistration && spatialRegistration.mySrs) || 'local'
+  setSrs(mySrs)
+  var tfList = assertArray(spatialRegistration && spatialRegistration.transformation)
+  if (tfList.length) {
+    var ans = []
+    for (var i=0; i<tfList.length; i++) {
+      var tf = tfList[i]
+      ans.push(
+        '<input type="button" value="Apply '+tf.transform+' transform from '+tf.fromSrs+' to '+tf.toSrs+'" onclick="applyTransformation(\''+tf.transform+'\',\''+tf.toSrs+'\')"'+'"/>&nbsp;(purpose: '+tf.purpose+')'
+      )
+    }
+    document.getElementById('listTransformations').innerHTML = 'The neuron contains pre-computed spatial transformations. It can be transformed to the following spaces:<ul><li>'+ans.join('</li><li>')+'</li></ul>'
+  } else {
+    document.getElementById('listTransformations').innerHTML = 'The neuron does not contain pre-computed spatial transformations.'
+  }
+}
+
+function listAtlases() {
+  var metaData = VIEWER.tree.metaData
+  var atlasList = assertArray(metaData.import && metaData.import && metaData.import.atlas)
+  if (atlasList.length) {
+    var transformations = {}
+    var modalities = {}
+    var ans = []
+    for (var i=0; i<atlasList.length; i++) {
+      var atlasItem = atlasList[i]
+      var url = atlasItem.url
+      var atlas = VIEWER.spatialRegistration.atlases[url]
+      transf = assertArray(atlas.spatialRegistration && atlas.spatialRegistration.transformation)
+      for (var j=0; j<transf.length; j++) {
+        var tf = transf[j]
+        if (!transformations[tf.fromSRS]) transformations[tf.fromSRS] = {}
+        if (!transformations[tf.fromSRS][tf.toSRS]) transformations[tf.fromSRS][tf.toSRS] = []
+        transformations[tf.fromSRS][tf.toSRS].push(tf)
+      }
+      modlt = assertArray(atlas.dataModalities)
+      for (var j=0; j<modlt.length; j++) {
+        var formats = modlt[j]
+        for (var f in formats) {
+          var format = assertArray(formats[f])
+          for (var m=0; m<format.length; m++) {
+            var md = format[m]
+            if (!modalities[md.SRS]) modalities[md.SRS] = []
+            modalities[md.SRS].push(md)
+          }
+        }
+      }
+      ans.push(
+        JSON.stringify(atlas)
+      )
+    }
+    document.getElementById('listAtlases').innerHTML = 'The neuron can be transformed to the following spatial reference systems:<ul><li>'+ans.join('</li><li>')+'</li></ul>'
+  } else {
+    document.getElementById('listAtlases').innerHTML = 'The neuron does not contain links to brain atlases.'
+  }
+}
+
+function displaySpatialRegistration() {
+  assertTreeLoaded()
+  var elem = document.getElementById('SPATIAL_REGISTRATION')
+  elem.style.display = 'block'
+  var ready = loadAtlasesAndTransforms(displaySpatialRegistration)
+  if (!ready) return
+  listTransformations()
+//  listAtlases()
+/*  var viewer = VIEWER
+  var treeDiv = document.getElementById('listAtlases');
+  metaData = viewer.tree.metaData
+  atlases = assertArray(metaData.import && metaData.import.atlas)
+  var ready = true
+  if (atlases) {
+    atlases = assertArray(atlases)
+    for (var i=0; i<atlases.length; i++) {
+      atlas = atlases[i]
+      if (atlas.url) {
+        if (!viewer.atlases[atlas.url]) {
+          ready = false
+          loadAtlas(atlas.url,displayTransformations)
+        }
+      }
+    }
+  }
+  if (ready) {
+    treeDiv.innerHTML = util.escapeHtml(JSON.stringify(metaData,null,2))
+  }
+  console.log(treeDiv.innerHTML)
+*/
+}
+
 function displayResult(data,fileName) {
   var errorDiv = document.getElementById('RuntimeError');
   errorDiv.style.display = 'none';
   var treeDiv = document.getElementById('HTML_TREE');
-  treeDiv.innerHTML = '<img src="./img/ajax-loader.gif" alt="This may take a few seconds..."/>Loading file "'+fileName+'".';
-  if (!data) return;
-  var parts = fileName.split('.');
-  var ext = parts[parts.length-1].toLowerCase();
-  if (ext == 'xml') {
-    TREE = treeFromNeurolucidaXML(data,fileName);
-  } else if (ext == 'asc') {
-    TREE = treeFromNeurolucidaASC(data,fileName);
-  } else if (ext == 'dat' || ext == 'nrx') {
-    TREE = treeFromNeurolucidaDAT(data,fileName);
-  } else if (ext == 'swc') {
-    TREE = treeFromSWC(data,fileName);
-  } else {
-    treeDiv.innerHTML = '';
-    RuntimeError('Your file does not have a supported extension (.asc, .xml, .swc, .dat, .nrx)');
+  treeDiv.innerHTML = '<img src="./img/ajax-loader.gif" alt="This may take a few seconds..."/>&nbsp;Loading file "'+fileName+'".'
+  if (!data) {
+    treeDiv.innerHTML = 'No data.'
     return;
   }
-
-  //tree = rawToBranches(raw,fileObj.name);
-  treeDiv.innerHTML = treeHtml(TREE,'h2');
-  var limits = TREE.getLimits();
-  if (limits) {
-    var mn = limits[0];
-    var mx = limits[1];
-    var mid = [0.5*(mn[0]+mx[0]), 0.5*(mn[1]+mx[1]), 0.5*(mn[2]+mx[2])];
-    var x3d_height = 1000;
-    var x3d_width = 1000;
-    var distanceW = 2*(mx[0]-mn[0])*x3d_height/x3d_width;
-    var distanceH = 2*(mx[1]-mn[1])*x3d_width/x3d_height;
-    var distance = Math.max(distanceW,distanceH);
-    var position = [mid[0],mid[1],mid[2]+distance];
-    
-    // replace existing x3dElem by the new domElem
-    var scene = document.getElementById('X3D_SCENE');
-    scene.innerHTML = treeToShapes(TREE);
-    var vpElem = document.createElement('viewpoint');
-    vpElem.setAttribute("orientation","0 0 1 0");
-    vpElem.setAttribute("fieldOfView","0.5236");
-    vpElem.setAttribute("position",position.join(' '));
-    vpElem.setAttribute("centerOfRotation",mid.join(' '));
-    scene.appendChild(vpElem);
-  }
+  setTimeout(function() {
+    //try {
+      var parts = fileName.split('.')
+      var ext = parts[parts.length-1].toLowerCase()
+      var tree
+      if (ext == 'xml') {
+        tree = (new neurolucida_class).treeFromXML(data,fileName)
+      } else if (ext == 'asc') {
+        tree = (new neurolucida_class).treeFromASC(data,fileName)
+      } else if (ext == 'dat' || ext == 'nrx') {
+        tree = (new neurolucida_class).treeFromDAT(data,fileName)
+      } else if (ext == 'swc') {
+        tree = (new swc_class).treeFromSWC(data,fileName)
+      } else {
+        treeDiv.innerHTML = ''
+        throw 'File "'+fileName+'" does not have a supported extension (.asc, .xml, .swc, .dat, .nrx)'
+      }
+      VIEWER = new viewer_class(tree)
+      displayText(VIEWER)
+      displayGraphics(VIEWER)
+      displaySpatialRegistration(VIEWER)
+    //} catch(msg) {
+    //  RuntimeError(msg,true)
+    //}
+  },0)
 }
 
-function handleFileSelect(evt) {
-  var fileObj = evt.target.files[0]; // FileList object
-  var fileName = fileObj.name;
+function fitAffine() {
+  const tree = VIEWER.tree
+  const cp = tree.objectPropertySets
+  for (var k in cp) {
+    if (cp[k]['atlas:coordinate']) {
+      console.log(cp[k]['atlas:coordinate'])
+    }
+  }
+console.log(cp)  
   
-  var reader = new FileReader();
+//  # 		<for objects.csv='1'>
+//  # 			<atlas:coordinate srs='ABA12' xyz.csv='-1.48,-1.48,-1.75'/>
+//  #     </for>
+  //
+}
+
+function displayMesh() {
+  // get mesh data from atlas provider by loading a .js script
+  // Using YQL and JSONP
+  //function testMe(data) {
+  //  console.log(data)
+  ///}
+  assertTreeLoaded()
+  $.ajax({
+    url: "https://scalablebrainatlas.incf.org/atlases/ABA_v3/loadmesh.js.php",
+    jsonp: "callback",
+    jsonpCallback: 'ABA_v3_mesh_wholebrain',
+    dataType: "jsonp",
+    data: {
+      structure: "wholebrain"
+    },
+    // Work with the response
+    success: function( ans ) {
+      var parentElem = document.getElementById('X3D_SCENE')
+      if (parentElem) {
+        var groupElem = document.createElement('group')
+        groupElem.innerHTML = VIEWER.meshXML('wholebrain_mesh',ans.vertices,ans.faces)
+        parentElem.appendChild(groupElem)
+        console.log('mesh ready')
+      } else {
+        console.log('No X3D_SCENE element found')
+      }
+    },
+    error: function( msg ) {
+      console.log('ERROR');      
+      console.log( msg ); // server response
+    }
+  });
+}
+
+function usePlotly() {
+  assertTreeLoaded()
+  window.open('plotly.html')
+}
+
+/*function showAtlasSlice(sliceAxis,sliceCoord) {
+  atlasXML = VIEWER.renderSlice(sliceAxis,sliceCoord)
+  var scene = document.getElementById('X3D_SCENE')
+  var groupElem = document.createElement('group')
+  groupElem.innerHTML = atlasXML
+  scene.appendChild(groupElem)
+  console.log('Now showing atlas slice')
+  displayGraphics(VIEWER)
+}*/
+
+function handleFileSelect(eventOrFile) {
+  var fileObj = eventOrFile instanceof File ? eventOrFile : eventOrFile.target.files[0] // FileList object
+  var fileName = fileObj.name
+  var reader = new FileReader()
   reader.onload = (function(fileName) { return function(e) {
-    displayResult(this.result,fileName);
-  }})(fileName);
+    displayResult(this.result,fileName)
+  }})(fileName)
 
   // Read in the image file as a data URL.
-  var parts = fileName.split('.');
-  var ext = parts[parts.length-1].toLowerCase();
+  var parts = fileName.split('.')
+  var ext = parts[parts.length-1].toLowerCase()
   if (ext.toLowerCase() == 'dat' || ext.toLowerCase() == 'nrx') {
-    reader.readAsArrayBuffer(fileObj);
+    reader.readAsArrayBuffer(fileObj)
   } else {
-    reader.readAsText(fileObj);
+    reader.readAsText(fileObj)
   }
 }
 
-function loadSampleNeuron() {
-  // include jquery
-  var elem = document.createElement('script');
-  elem.setAttribute('type','text/javascript');
-  elem.setAttribute('src','./js/jquery-2.1.4.min.js');
-  elem.onreadystatechange = elem.onload = function() {
-    var fileName = 'c10861.CNG.swc';
-    $.ajax('./samples/'+fileName,{
-      'mimeType':'text/plain; charset=utf-8'
-    })
-    .done(function(data) {
-      displayResult(data,fileName);
-    })
-    .fail(function(err) {
-      if (err.statusText == 'OK') displayResult(err.responseText,fileName) // data returned as error when using file:/
-      else RuntimeError(JSON.stringify(err, null, 2))
-    })
+function loadSampleNeuron(fileName) {
+  var request = new XMLHttpRequest();
+  request.open('GET', './samples/'+fileName, true);
+  request.responseType = 'blob';
+  request.onload = function() {
+    handleFileSelect(new File([request.response],fileName))
   }
-  document.getElementsByTagName('head')[0].appendChild(elem);
+  request.send();
 }
   
-function handleGetRequest() {
-  var hbpUuid = getQueryVariable('hbp-uuid');
+function initViewer() {
+  var repo = util.getQueryVariable('repo')
+  if (!repo) repo = 'local';
+  applyNeuronSource(repo);
+
+  var hbpUuid = util.getQueryVariable('hbp-uuid');
   if (!hbpUuid) {
-    var state = getQueryVariable('ctxstate');
+    var state = util.getQueryVariable('ctxstate');
     if (state) {
       state = decodeURIComponent(state).split('&');
       var kv = state[0].split('=');
@@ -305,8 +1300,7 @@ function handleGetRequest() {
     }
   }
   if (hbpUuid) {
-    //console.log('The HBP uuid is: '+hbpUuid)
-    var scripts = ["./js/jquery-2.1.4.min.js","./js/bbp-oidc-client.js"]
+    var scripts = ["./js/bbp-oidc-client.js"]
     for (var i=0; i<scripts.length; i++) {
       var elem = document.createElement('script')
       elem.setAttribute('type','text/javascript')
@@ -320,10 +1314,17 @@ function handleGetRequest() {
       document.getElementsByTagName('head')[0].appendChild(elem)
     }
   }
+
+  // Google Analytics
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','https://www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-83599328-1', 'auto');
+  ga('send', 'pageview');
 }
 
-document.getElementById('morpho_file').addEventListener('change', handleFileSelect, false);
-//]]>
 </script>
 </body>
 </html>
