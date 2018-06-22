@@ -246,17 +246,17 @@ function tree_class(fileName,swcAttrs,metaData,customTypes,customProperties,poin
   for (var type in customTypes) {
     var ct = assertArray(customTypes[type])
     for (var j=0; j<ct.length; j++) {
-      var attrs = this.cloneObject(ct[j])
-      attrs.__type__ = type
-      typeMap[attrs.id] = this.insertDefaults(type,attrs)
+      var attrs = this.cloneObject(ct[j]);
+      attrs.__type__ = type;
+      typeMap[attrs.id] = this.insertDefaults(type,attrs);
     } 
   }
   /* add SWC standard types if not already present */
-  typeMap[0] || (typeMap[0] = this.insertDefaults('undefined',{}))
-  typeMap[1] || (typeMap[1] = this.insertDefaults('soma',{}))
-  typeMap[2] || (typeMap[2] = this.insertDefaults('axon',{}))
-  typeMap[3] || (typeMap[3] = this.insertDefaults('dendrite',{}))
-  typeMap[4] || (typeMap[4] = this.insertDefaults('apical',{}))
+  typeMap['0'] || (typeMap['0'] = this.insertDefaults('undefined',{}))
+  typeMap['1'] || (typeMap['1'] = this.insertDefaults('soma',{}))
+  typeMap['2'] || (typeMap['2'] = this.insertDefaults('axon',{}))
+  typeMap['3'] || (typeMap['3'] = this.insertDefaults('dendrite',{}))
+  typeMap['4'] || (typeMap['4'] = this.insertDefaults('apical',{}))
   
   this.typeMap = typeMap
   this.points = points
@@ -399,7 +399,7 @@ tree_class.prototype.getGroups = function(children) {
     ch = children[i]
     tp = this.lines.row(ch)[0]
     try {
-      r = this.typeMap[tp].group
+      r = this.typeMap[''+tp].group
     } catch(e) {
       this.typeMap[tp] = this.insertDefaults('base',{})
       console.log('Unknown SWC type '+tp+' on line '+ch+'.')
@@ -1060,7 +1060,8 @@ swc_class.prototype.treeFromSWC = function(swcStr,fileName) {
   }
   header = header.join('\n')
   var swcAttrs={}, metaData, customTypes, customProperties
-  if (header.match(/^\s*<swcPlus version=[\'\"][\d\.]+[\'\"]/g)) {
+  // note: swcPlus version information is not used
+  if (header.match(/^\s*<swcPlus version=[\'\"][\d\.]+[\'\"]/g) || header.match(/^\s*<swcPlus/g)) {
     var parser = new DOMParser();
     var xmlDoc = parser.parseFromString(header,"text/xml");
     var err = xmlDoc.getElementsByTagName("parsererror")
