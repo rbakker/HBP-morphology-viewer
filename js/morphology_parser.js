@@ -52,9 +52,10 @@ function assertObject(a) {
  * @param {int} numCols - number of columns
  */
 function matrix_class(dataType,numRows,numCols) {
-  this.nR = numRows
-  this.nC = numCols
-  this.data = new dataType(numRows*numCols)
+  this.nR = numRows;
+  this.nC = numCols;
+  this.dataType = dataType;
+  this.data = new dataType(numRows*numCols);
 }
 
 /**
@@ -444,46 +445,62 @@ tree_class.prototype.getLimits = function(lineId) {
   return [mn,mx];
 }
 
-tree_class.prototype.swcPoints = function(numDecimals) {
-  var swcPoints = []
-  var id = 0
-  var lenLines = this.lines.nR
-  for (var lineId=1; lineId<lenLines; lineId++) {
-    var line = this.lines.row(lineId)
-    var p = line[3]
-    var negOffset = line[4]
-    var iParent = -1
-    if (p>0) {
-      var parent = this.lines.row(p)
-      iParent = parent[1]+parent[2]-1-negOffset // CORRECTED
+tree_class.prototype.swcPoints = function(numDecimals,includeLines) {
+  let myLines = this.lines;
+  if (includeLines) {
+    myLines = new varMatrix_class(myLines.dataType,myLines.nC)
+    myLines.pushRow(this.lines.row(0)); // start with dummy line
+    const newLineIds = {};
+    for (let i=0; i<includeLines.length; i++) {
+      const lineId = includeLines[i];
+      const newLineId = i+1;
+      const line = this.lines.row(lineId);
+      newLineIds[lineId] = newLineId; // each line contains objectType,startPoint,numPoints,parentLine,negOffset
+      // replace parent line by new id
+      line[3] = newLineIds[line[3]] || 0;
+      myLines.pushRow(line);
     }
-    var tp = line[0]
-    for (var i=line[1]; i<line[1]+line[2]; i++) { // CORRECTED
-      id += 1
-      var point = this.points.row(i)
-      var rounded = []
+  }
+  const swcPoints = [];
+  const newPointIds = {};
+  let newPointId = 0;
+  for (var lineId=1; lineId<myLines.nR; lineId++) {
+    let parentPointId = 0;
+    const line = myLines.row(lineId);
+    const parentLineId = line[3];
+    if (parentLineId>0) {
+      const parentLine = myLines.row(parentLineId);
+      const negOffset = line[4];
+      parentPointId = parentLine[1]+parentLine[2]-1-negOffset;
+    }    const tp = line[0];
+    for (let pointId=line[1]; pointId<line[1]+line[2]; pointId++) {
+      newPointId += 1
+      newPointIds[pointId] = newPointId;
+      const newParentPointId = newPointIds[parentPointId] || 0
+      const point = this.points.row(pointId)
+      const rounded = []
       if (numDecimals) {
-        var f = parseFloat('1e'+numDecimals)
-        for (var j=0; j<4; j++) rounded.push( Math.round(point[j]*f)/f )
+        const f = parseFloat('1e'+numDecimals)
+        for (let j=0; j<4; j++) rounded.push( Math.round(point[j]*f)/f )
       } else {
-        rounded = point
+        rounded = point;
       }
       swcPoints.push([
-        id,
-        line[0],
+        newPointId,
+        tp,
         rounded[0],
         rounded[1],
         rounded[2],
         rounded[3],
-        iParent
-      ])
-      iParent = i
+        (newParentPointId || -1)
+      ]);
+      parentPointId = pointId;
     }
   }
   return swcPoints
 }
 
-tree_class.prototype.toSWC = function(format) {
+tree_class.prototype.toSWC = function(format,includeLines) {
   const swcDict = this.swcAttrs;
   swcDict.metaData = this.metaData;
   swcDict.customTypes =  this.customTypes
@@ -501,7 +518,7 @@ tree_class.prototype.toSWC = function(format) {
     return JSON.stringify(swcDict,null,2)
   } else {
     const parser = new DOMParser();
-    swcDict.swcPoints = this.swcPoints(3)
+    swcDict.swcPoints = this.swcPoints(3,includeLines)
     if (format == 'jwc') {
       return JSON.stringify(swcDict,null,2)
     } else {

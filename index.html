@@ -31,9 +31,10 @@ If not, see <http://www.gnu.org/licenses/>
 <!--link rel='stylesheet' type='text/css' href='./css/jquery-multiselect.css' /-->
 <script type="text/javascript" src="./js/morphology_parser.js"></script>
 <script type="text/javascript" src="./js/morphology_viewer.js"></script>
-<script type="text/javascript" src="./swcPlus/swcPlus_typeLibrary.js"></script>
+<script type="text/javascript" src="../swcPlus/swcPlus_typeLibrary.js"></script>
 <script type="text/javascript" src="./js/vkbeautify.js"></script>
 <script type="text/javascript" src="./js/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="./js/fancytree.js"></script>
 <style>
 body{ font-family:Gotham,Arial,sans-serif;font-size:12px;line-height:1.3;color:rgb(0,0,0);background-color: #f8f8f8 }
 button,input,optgroup,select,textarea{color:inherit;font:inherit;margin:0}
@@ -99,6 +100,35 @@ select.search-filter { vertical-align: middle }
     border-style: solid;
     border-color: #eea transparent transparent transparent;
 }
+
+/* fancytree related */
+div.menuWindow {
+  display: none;
+  position: absolute;
+  background-color: #EEE;
+  padding: 0ex;
+  border: 0.1ex solid #000;
+  border-radius: 1ex;
+  z-index: 101;
+  vertical-align: center;
+}
+div.menuWindow form table {
+  padding: 1ex
+}
+
+span.contextMenu {
+  display: inline-block;
+  padding: 2px;
+  border: 1px solid #008;
+  margin: 0.1ex 0.5ex;
+  border-radius: 0.6ex;
+}
+.contextMenu {
+  background: #EEE;
+}
+.contextMenu:hover {
+  background: #4F0;
+}
 </style>
 
 </head>
@@ -113,7 +143,7 @@ select.search-filter { vertical-align: middle }
   <div style="float:left; width: 35%">
     <div class="tooltip" style="left: 8px; margin-right: 8px"><input type="button" onclick="saveAsPng()" value="Export PNG"/><span class="tooltiptext">Save the current view as a bitmap image (.png)</span></div>
     <div class="tooltip"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div>
-    <div class="tooltip"><input type="button" onclick="saveAsSwc()" value="Export SWC+"/><span class="tooltiptext">Save the current view as an SWC morphology file (.swc)</span></div>
+    <div class="tooltip"><input type="button" onclick="exportMenu(this)" value="Export SWC+ ..."/><span class="tooltiptext">Save the current view as an SWC morphology file (.swc)</span></div>
   </div>
   <div class="tooltip" style="left: 8px; margin-right: 8px">Soma: <input type="color" id="somaColor" onchange="displayGraphics(VIEWER)" value="#00dd00" style="width: 5ex;"><span class="tooltiptext">Set the color for the soma (cell body)</span></div>
   <div class="tooltip">Axon: <input type="color" id="axonColor" onchange="displayGraphics(VIEWER)" value="#0000ff" style="width: 5ex;"><span class="tooltiptext">Set the color for the axonal tree</span></div>
@@ -176,6 +206,7 @@ a reference brain atlas." <a href="https://bmcneurosci.biomedcentral.com/article
 <p/>
 <a name="issues"></a><h3>What's new</h3>
 <ul>
+  <li>2018-Jun: When saving to SWC+, you have a choice of saving the current view or the complete neuron.</li>
   <li>2017-Apr: Spines loaded from neurons in Neurolucida DAT/ASC/XML formats.</li>
   <li>2017-Feb: Neuron can be saved in the new SVG+ format.</li>
   <li>2016-Nov: New release with improved memory management, better hierarchical file listing, support for markers and spines.</li>
@@ -200,7 +231,6 @@ a reference brain atlas." <a href="https://bmcneurosci.biomedcentral.com/article
   <li>Feature request: Generate data tree dynamically to save memory.</li>
   <li>Feature request: Tighter integration between data tree and 3d view.</li>
   <li>Feature request: Buttons to show default perspectives.</li>
-  <li>Feature request: SaveAs SWC.</li>
   <li>Feature request: <div class="tooltip"><input type="button" onclick="saveAsSvg()" value="Export SVG"/><span class="tooltiptext">Save the current view as a vector image (.svg)</span></div></li>
 </ul>
 Acknowledgement for Neurolucida DAT file parsing: <a href="http://neuronland.org/NLMorphologyConverter/MorphologyFormats/NeurolucidaDAT/Spec.html">Neuronland</a>.
@@ -763,14 +793,28 @@ function saveAsX3d() {
   }
 }
 
-function saveAsSwc() {
+function saveAsSwc(onlyCurrentView) {
   assertTreeLoaded()
   if (SCRIPTS['FileSaver']) {
-    const swc = VIEWER.tree.toSWC()
-    const blob = new Blob([swc], {type:'text/swc'})
+    let swc;
+    if (onlyCurrentView) {
+      // nodeList contains [0:lineId,1:groupId,2:parentId,3:firstChildId,4:visibility]
+      const includeLines = [];
+      for (let i=0; i<VIEWER.nodeList.nR; i++) {
+        if (VIEWER.inheritedVisibility(i) === 1) {
+          const node = VIEWER.nodeList.row(i);
+          if (node[0]) includeLines.push(node[0]);
+        }
+      }
+      includeLines.sort((a, b) => a - b);
+      swc = VIEWER.tree.toSWC('swc+',includeLines);
+    } else {
+      swc = VIEWER.tree.toSWC('swc+');
+    }
+    const blob = new Blob([swc], {type:'text/swc'});
     saveAs(blob,'morphology.swc')
   } else {
-    addScript('FileSaver','./js/FileSaver.min.js',saveAsSwc)
+    addScript('FileSaver','./js/FileSaver.min.js', () => saveAsSwc(onlyCurrentView) )
   }
 }
 
@@ -783,6 +827,18 @@ function saveAsNml() {
   } else {
     addScript('FileSaver','./js/FileSaver.min.js',saveAsNml)
   }
+}
+
+function exportMenu(elem) {
+  const menu = new contextMenu_class(elem);
+  menu.addRow()
+  .addCell(
+    ['input',{type:"button", value:"Save the complete neuron to SWC+", onclick: () => saveAsSwc(false)}]
+  );
+  menu.addRow()
+  .addCell(
+    ['input',{type:"button", value:"Save only the current view to SWC+", onclick: () => saveAsSwc(true)}]
+  );
 }
 
 function setColor(elem) {
@@ -942,7 +998,6 @@ function loadAtlasesAndTransforms(onDone,onFail) {
 
 function availableResourcesBySrs(srs) {
   var atlases = VIEWER.spatialRegistration.atlases
-console.log(atlases)
   var modalitiesBySrs = {}
   var transformationsToSrs = {}
   for (var k in atlases) {
@@ -968,7 +1023,6 @@ console.log(atlases)
       transformationsToSrs[toSrs].push(transformations[i])
     }
   }
-console.log(modalitiesBySrs)
   availableResources = []
   var avail = assertArray(modalitiesBySrs[srs])
   for (var j=0; j<avail.length; j++) {
@@ -1039,7 +1093,6 @@ function dataSelectHtml(i,resource) {
 
 function setSrs(srs) {
   $('#mySrs').html(srs)
-console.log(  availableResourcesBySrs(srs)  )
   var availableResources = availableResourcesBySrs(srs)
   VIEWER.spatialRegistration.availableResources = availableResources
   var txt = []
@@ -1200,7 +1253,6 @@ function fitAffine() {
       console.log(cp[k]['atlas:coordinate'])
     }
   }
-console.log(cp)  
   
 //  # 		<for objects.csv='1'>
 //  # 			<atlas:coordinate srs='ABA12' xyz.csv='-1.48,-1.48,-1.75'/>
