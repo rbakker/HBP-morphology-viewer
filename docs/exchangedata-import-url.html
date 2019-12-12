@@ -1,0 +1,27 @@
+<html>
+<script type="module">
+import { moviInterface_class } from "../js/movi-interface.js";
+
+var moviInterface;
+
+window.onclickHandler = function(evt) {
+  // create the moviInterface, make sure the moviUrl points to the HBP Morphology Viewer
+  const moviUrl = '../';
+  moviInterface = moviInterface || new moviInterface_class(moviUrl);
+
+  // the fileUrl must point to a file ON THE SAME DOMAIN as your website,
+  // or on a server that is configured to allow Cross Origin Requests.
+  const fileUrl = '../samples/TCneuron_EP36-S1_9-9-17.DAT';
+  const moviCommand = {
+    "method": "MoVi.import",
+    "params": {
+      "name": fileUrl,
+      "url": fileUrl
+    }
+  }
+  moviInterface.send(moviCommand);
+}
+</script>
+<h3>Your external web application</h3>
+Open HBP Morphology Viewer: <input type="button" onclick="onclickHandler()" value="Import file by sending URL"/>
+</html>

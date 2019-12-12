@@ -1,0 +1,50 @@
+<html>
+<script type="module">
+import { moviInterface_class } from "../js/movi-interface.js";
+
+var moviInterface;
+
+function saveAs(name,blob) {
+  // for better browser support: use the FileSaver.js library!
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.download = name;
+  a.href = url;
+  a.textContent = name;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+window.onclickHandler = function(evt) {
+  // create the moviInterface, make sure the moviUrl points to the HBP Morphology Viewer
+  const moviUrl = '../';
+  moviInterface = moviInterface || new moviInterface_class(moviUrl);
+
+  // the fileUrl must point to a file ON THE SAME DOMAIN as your website,
+  // or on a server that is configured to allow Cross Origin Requests.
+  const fileUrl = '../samples/c10861.CNG.swc';
+  const moviCommand = {
+    "method": "MoVi.convert",
+    "params": {
+      "name": fileUrl,
+      "url": fileUrl,
+      "toMime": "model/mbf.xml+gzip",
+      "doRender": true
+    }
+  }
+  moviInterface.send(moviCommand)
+  .then( (response)=> {
+    // This is the action to perform when the converted neuron is ready.
+    // Let's save the converted neuron to a file.
+    const result = response.result;
+    const blobType = result.mime;
+    const blob = new Blob([result.contents], {
+      type: blobType
+    });   
+    saveAs(result.name,blob);
+  })
+}
+</script>
+<h3>Your external web application</h3>
+Open HBP Morphology Viewer: <input type="button" onclick="onclickHandler()" value="Convert file from SWC to gzipped XML"/>
+</html>
