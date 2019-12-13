@@ -23,13 +23,13 @@ def JS(s):
   out.clear_output()
 
 class RpcInterface:
-  def __init__(self,instanceName,baseUrl,appUrl,scriptUrl):
+  def __init__(self,instanceName,baseUrl,appUrl,jsModuleUrl,jsModuleClass):
     self.instanceName = instanceName
     self.partialResponses = {}
     self.fetchInterface = 'window.global_rpcInterfaces["{}"]'.format(instanceName)
     if baseUrl[:-1] != '/': baseUrl = baseUrl + '/'
     appUrl = urljoin(baseUrl,appUrl)
-    scriptUrl = urljoin(baseUrl,scriptUrl)
+    jsModuleUrl = urljoin(baseUrl,jsModuleUrl)
     
     # In Javascript, load scriptUrl and create a new Interface object
     JS("""
@@ -37,7 +37,7 @@ if (!window.global_rpcInterfaces) window.global_rpcInterfaces = {{}};
 {} = new Promise( (resolve,reject) => {{
   import('{}')
   .then( (mod) => {{
-    const rpc = new mod.moviInterface_class('{}');
+    const rpc = new mod.{}('{}');
     rpc.jupyterResponseHandler = (packedResponse,callback) => {{  
       if (callback) {{
         const kernel = IPython.notebook.kernel;
@@ -49,7 +49,7 @@ console.log(pyCommand);
     resolve(rpc);
   }});
 }} );
-    """.format(self.fetchInterface,scriptUrl,appUrl,instanceName,instanceName))
+    """.format(self.fetchInterface,jsModuleUrl,jsModuleClass,appUrl,instanceName,instanceName))
   
   @staticmethod
   def encodeRequest(command):
@@ -174,10 +174,10 @@ console.log(pyCommand);
     if not 'id' in command: command['id'] = uuid.uuid4().hex
     command = self.encodeRequest(command)
     if awaitInput:
-      JS("""{}.then( (rpc) => {{ rpc.send({}).then( (response) => {{ response = rpc.packResponse(response); const kernel = IPython.notebook.kernel; kernel.send_input_reply(response) }} ); }} );""".format(self.fetchInterface,json_encode(command)))
+      JS("""{}.then( (rpc) => {{ rpc.send({}).then( async (response) => {{ response = await rpc.packResponse(response); const kernel = IPython.notebook.kernel; kernel.send_input_reply(response) }} ); }} );""".format(self.fetchInterface,json_encode(command)))
     else:
       if callback and hasattr(callback,'__name__'): callback = callback.__name__
-      JS("""{}.then( (rpc) => {{ rpc.send({}).then( (response) => {{ response = rpc.packResponse(response); rpc.jupyterResponseHandler(response,{}) }} ); }} );""".format(self.fetchInterface,json_encode(command),json_encode(callback)))
+      JS("""{}.then( (rpc) => {{ rpc.send({}).then( async (response) => {{ response = await rpc.packResponse(response); rpc.jupyterResponseHandler(response,{}) }} ); }} );""".format(self.fetchInterface,json_encode(command),json_encode(callback)))
     return command['id']
     
   def awaitResponse(self,command):
@@ -199,5 +199,5 @@ console.log(pyCommand);
 
 
 class MoviInterface(RpcInterface):
-  def __init__(self,instanceName,baseUrl='https://neuroinformatics.nl/HBP/morphology-viewer',appUrl='./',scriptUrl='./js/movi-interface.js'):
-    RpcInterface.__init__(self,instanceName,baseUrl,appUrl,scriptUrl)
+  def __init__(self,instanceName,baseUrl='https://neuroinformatics.nl/HBP/morphology-viewer',appUrl='./',jsModuleUrl='./js/movi-interface.js'):
+    RpcInterface.__init__(self,instanceName,baseUrl,appUrl,jsModuleUrl,jsModuleClass='moviInterface_class')
