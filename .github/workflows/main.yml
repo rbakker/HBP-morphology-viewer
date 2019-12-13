@@ -6,7 +6,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@master
       with:
         fetch-depth: 1
     - name: Copy files
@@ -14,4 +14,12 @@ jobs:
         cp ./js/rpc-interface.js ./docs/rpc-interface.js
         cp ./js/movi-interface.js ./docs/movi-interface.js
         cp ./js/pako.mod.js ./docs/pako.mod.js
-      
+    - name: Commit files
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git commit -m "Add changes" -a
+    - name: Push changes
+      uses: ad-m/github-push-action@master
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
