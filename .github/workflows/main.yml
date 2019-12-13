@@ -11,5 +11,7 @@ jobs:
         fetch-depth: 1
     - name: Copy files
       run: |
-        ls | more
         cp ./js/rpc-interface.js ./docs/rpc-interface.js
+        cp ./js/movi-interface.js ./docs/movi-interface.js
+        cp ./js/pako.mod.js ./docs/pako.mod.js
+      
