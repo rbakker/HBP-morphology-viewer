@@ -8,5 +8,4 @@ jobs:
     steps:
     - name: Copy files
       run: |
-        pwd
-        ls
+        ls .
