@@ -8,4 +8,5 @@ jobs:
     steps:
     - name: Copy files
       run: |
-        cp js/rpc-interface.js docs/rpc-interface.js
+        pwd
+        ls
