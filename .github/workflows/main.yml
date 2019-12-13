@@ -1,0 +1,11 @@
+name: build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Copy files
+      run: |
+        cp js/rpc-interface.js docs/rpc-interface.js
