@@ -19,8 +19,6 @@ If not, see <http://www.gnu.org/licenses/>
 
 "use strict";
 
-import * as pako from  './pako.mod.js';
-
 /*
  * Utilities
  */
@@ -58,7 +56,7 @@ const customDiv = (doc,msg,clickToHide,timeout) => {
   return div;    
 }
 
-const ungzipbase64 = (obj,pakoInflate) => {
+const ungzipbase64 = async (obj,pakoInflate) => {
   let numAffected = 0;
   for (let k in obj) if (obj.hasOwnProperty(k)) {
     const v = obj[k];
@@ -135,6 +133,7 @@ const base64gzip = (obj,pakoGzip) => {
 const decodeRequest = async (command) => {
   const context = command['@context'] || {};
   if ('Base64GzippedBytes' in context) {
+    const pako = await import('./pako.mod.js');
     const numAffected = ungzipbase64(command,pako.inflate);
     delete context['Base64GzippedBytes'];
   }
@@ -325,7 +324,7 @@ rpcInterface_class.prototype = {
       setTimeout( () => reject(namedError(Error(this.appName+' did not respond for '+timeout/1000+' seconds.'),'TimeoutError')), timeout )
     } );
   },
-  _stringifyResponse: function(response) {
+  _truncateResponse: function(response) {
     const s = JSON.stringify(response);
     // Already truncated?
     if (response.rpc && 'partsRemaining' in response.rpc) return s;
@@ -439,7 +438,7 @@ rpcInterface_class.prototype = {
       console.log('Timeout on receive');
       try {
         //const status = await Promise.race([received,_awaitConfirmReopen(err.message)]);
-        const status = _awaitConfirmReopen(err.message);
+        const status = this._awaitConfirmReopen(err.message);
         if (status === 'reopen') {
           // Resolve when reopen ok: resend command
           console.log('Resend command (not received)');
@@ -465,9 +464,10 @@ rpcInterface_class.prototype = {
       throw(err);
     } )
   },
-  encodeResponse: function(response) {
+  encodeResponse: async function(response) {
     const result = response.result;
     if (result instanceof Object) {
+      const pako = await import('./pako.mod.js');
       const numAffected = base64gzip(result,pako.gzip);
       if (numAffected) {
         const context = response['@context'] || {};
@@ -477,9 +477,8 @@ rpcInterface_class.prototype = {
     }
     return response;
   },
-  packResponse: function(response) {
-    response = this._stringifyResponse(this.encodeResponse(response));
-    return response;
+  packResponse: async function(response) {
+    return this._truncateResponse(await this.encodeResponse(response));
   },
 }
 
