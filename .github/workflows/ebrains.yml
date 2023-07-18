@@ -2,7 +2,7 @@ name: Mirror to Ebrains
 
 on:
   push:
-    branches: [ main ]
+    branches: [ master ]
 
 jobs:
   to_ebrains:
@@ -12,6 +12,6 @@ jobs:
         uses: wei/git-sync@v3
         with:
           source_repo: "rbakker/HBP-morphology-viewer"
-          source_branch: "main"
+          source_branch: "master"
           destination_repo: "https://githubmirror:${{ secrets.EBRAINS_GITLAB_ACCESS_TOKEN }}@gitlab.ebrains.eu/rbakker/hbp-morphology-viewer.git"
           destination_branch: "master"
