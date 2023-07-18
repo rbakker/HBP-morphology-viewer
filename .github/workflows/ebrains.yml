@@ -1,0 +1,17 @@
+name: Mirror to Ebrains
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  to_ebrains:
+    runs-on: ubuntu-latest
+    steps:
+      - name: syncmaster
+        uses: wei/git-sync@v3
+        with:
+          source_repo: "rbakker/HBP-morphology-viewer"
+          source_branch: "main"
+          destination_repo: "https://githubmirror:${{ secrets.EBRAINS_GITLAB_ACCESS_TOKEN }}@gitlab.ebrains.eu/rbakker/hbp-morphology-viewer.git"
+          destination_branch: "master"
